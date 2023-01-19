@@ -1,4 +1,4 @@
-import pychuck
+from pychuck.core import _Chuck, spork
 import argparse
 
 if __name__ == '__main__':
@@ -11,7 +11,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # start chuck
-    pychuck._Chuck(
+    _Chuck(
         sample_rate=args.srate,
         buffer_size=args.bufsize,
         verbose=args.verbose
@@ -19,4 +19,4 @@ if __name__ == '__main__':
 
     # execute files
     for file in args.files:
-        pychuck.spork(exec, open(file).read())
+        spork(exec, open(file).read())

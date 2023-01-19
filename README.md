@@ -29,6 +29,6 @@ cd pychuck
 conda create -y -n pychuck -c conda-forge librosa
 conda activate pychuck
 
-python main.py example.py
+python chuck.py examples/sinosc.py
 ```
 
