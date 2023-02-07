@@ -5,5 +5,5 @@ s = SinOsc()
 s >> dac
 
 while True:
-    s.freq = random.randrange(100, 1000)
-    Dur(100, "ms") >> now
+    s.freq = random.randrange(30, 1000)
+    Dur(1, "samp") >> now

@@ -16,6 +16,7 @@ class _ChuckModuleType(Enum):
 class _ChuckModule:
     def __init__(self):
         self.type = None
+        self.now = pychuck.__CHUCK__.now
         self.sample_rate = pychuck.__CHUCK__.sample_rate
         self.buffer_size = pychuck.__CHUCK__.buffer_size
         # self.prev = []
@@ -137,12 +138,36 @@ class SinOsc(_ChuckModule):
         self.type = _ChuckModuleType.OUT
         self.next = []
         self.freq = freq
-        self.phi = 0
 
     def __str__(self):
         return f'SinOsc({self.freq})'
 
     def compute(self, length: int):
-        output = librosa.tone(self.freq, sr=self.sample_rate, length=length, phi=self.phi)
-        self.phi += 2 * np.pi * self.freq * length / self.sample_rate
+        phi = self.now.sample_count / self.sample_rate * 2 * np.pi * self.freq
+        output = librosa.tone(self.freq, sr=self.sample_rate, length=length, phi=phi)
         return output
+
+
+class SndBuf(_ChuckModule):
+    def __init__(self, filename: str = None):
+        super().__init__()
+        self.type = _ChuckModuleType.OUT
+        self.next = []
+        self.filename = filename
+        self.data = None
+        self.pos = 0
+
+    def __str__(self):
+        return f'SndBuf({self.filename.split("/")[-1]})'
+
+    def read(self, filename: str):
+        self.filename = filename
+        self.data, _ = librosa.load(filename, sr=self.sample_rate)
+        self.pos = 0
+
+    def compute(self, length: int):
+        output = np.zeros(length, dtype=np.float32)
+        if self.pos > len(self.data):
+            return output
+        output[:len(self.data) - self.pos] = self.data[self.pos:self.pos + length]
+        self.pos += length

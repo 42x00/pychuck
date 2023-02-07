@@ -25,6 +25,7 @@ class _ChuckThread:
         for global_module, module in self.links:
             global_module.remove(module)
         self.links = []
+        self.ready.set()
 
     def wait(self, sample_request: int):
         self.sample_request = sample_request

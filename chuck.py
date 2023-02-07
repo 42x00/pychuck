@@ -19,4 +19,4 @@ if __name__ == '__main__':
 
     # execute files
     for file in args.files:
-        spork(exec, open(file).read())
+        spork(exec, open(file).read(), globals())
