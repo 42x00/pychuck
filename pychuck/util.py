@@ -1,35 +1,30 @@
 import pychuck
 
-import threading
 from enum import Enum
 
 
-class _ChuckNow:
-    def __init__(self):
-        self.sample_count = 0
-
-    def reset(self):
-        self.sample_count = 0
-
-
-class _ChuckTimeUnit(Enum):
+class _ChuckDurUnit(Enum):
     ms = 1e-3
     s = 1
     m = 60
     h = 3600
+    day = 86400
+    week = 604800
 
 
 class Dur:
-    def __init__(self, value: float, unit: str = 's'):
-        self.value = value * pychuck.__CHUCK__.sample_rate
+    def __init__(self, dur: float, unit: str = 's'):
+        self.frames = dur * pychuck.__CHUCK__.sample_rate
         if unit == 'samp':
-            self.value = value
-        elif unit in _ChuckTimeUnit.__members__:
-            self.value *= _ChuckTimeUnit[unit].value
+            self.frames = int(dur)
+        elif unit in _ChuckDurUnit.__members__:
+            self.frames = int(self.frames * _ChuckDurUnit[unit].value)
         else:
             raise ValueError(f'Invalid time unit: {unit}')
+        if self.frames <= 0:
+            raise ValueError(f'Duration must be positive, but got {dur} {unit}')
 
-    def __rshift__(self, other: _ChuckNow):
-        sample_request = int(round(self.value))
-        if sample_request > 0:
-            threading.current_thread().instance.wait(sample_request)
+
+class _ChuckNow:
+    def __init__(self):
+        self.frame = 0

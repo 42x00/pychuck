@@ -1,173 +1,117 @@
 import pychuck
 
 import librosa
-import threading
-from enum import Enum
 import numpy as np
-import sounddevice as sd
-
-
-class _ChuckModuleType(Enum):
-    IN = 0  # dac, blackhole, etc.
-    OUT = 1  # adc, SinOsc, etc.
-    IN_OUT = 2  # FFT, etc.
 
 
 class _ChuckModule:
     def __init__(self):
-        self.type = None
-        self.now = pychuck.__CHUCK__.now
+        self.now = pychuck.now
         self.sample_rate = pychuck.__CHUCK__.sample_rate
         self.buffer_size = pychuck.__CHUCK__.buffer_size
-        # self.prev = []
-        # self.next = []
+        self.buffer = np.zeros(self.buffer_size, dtype=np.float32)
+        self.computed = False
 
-    def __rshift__(self, other: '_ChuckModule') -> '_ChuckModule':
-        if self.type == _ChuckModuleType.IN:
-            raise Exception(f'{self.__class__.__name__} cannot be used as an input')
-        elif other.type == _ChuckModuleType.OUT:
-            raise Exception(f'{other.__class__.__name__} cannot be used as an output')
-        else:
-            return self.connect(other)
-
-    def append(self, other: '_ChuckModule', which: str):
-        self.__dict__[which].append(other)
-
-    def connect(self, other: '_ChuckModule') -> '_ChuckModule':
-        self.append(other, 'next')
-        other.append(self, 'prev')
+    def __rshift__(self, other: '_ChuckModule'):
+        self._next(other)
+        other._prev(self)
         return other
 
+    def _next(self, other: '_ChuckModule'):
+        self.next.append(other)
 
-class _ChuckGlobalModule(_ChuckModule):
+    def _prev(self, other: '_ChuckModule'):
+        self.prev.append(other)
+
+    def clear(self):
+        if not self.computed:
+            return
+        self.computed = False
+        if hasattr(self, 'next'):
+            for module in self.next:
+                module.clear()
+        if hasattr(self, 'prev'):
+            for module in self.prev:
+                module.clear()
+
+
+class _ADC(_ChuckModule):
     def __init__(self):
         super().__init__()
-        self.lock = threading.Lock()
-        self.modules = []
-        self.stream = None
+        self.next = []
 
-    def append(self, other: '_ChuckModule', which: str):
-        with self.lock:
-            self.modules.append(other)
-            if not self.stream.active:
-                self.stream.start()
-        threading.current_thread().instance.remember(self, other)
-
-    def remove(self, other: '_ChuckModule'):
-        with self.lock:
-            self.modules.remove(other)
-            if len(self.modules) == 0 and self.stream.active:
-                self.stream.stop()
-
-
-class _ADC(_ChuckGlobalModule):
-    def __init__(self):
-        super().__init__()
-        self.type = _ChuckModuleType.OUT
-
-    def __str__(self):
+    def __repr__(self):
         return 'adc'
 
-    def compute(self, length: int):
-        # TODO: implement
-        pass
+    def _next(self, other: '_ChuckModule'):
+        pychuck.__CHUCK__.current_shred.modules['adc'].append(other)
+        self.next.append(other)
+
+    def compute(self, frames: int):
+        if self.computed:
+            return
+        self.computed = True
+        for module in self.next:
+            module.compute(frames)
 
 
-class _DAC(_ChuckGlobalModule):
+class _DAC(_ChuckModule):
     def __init__(self):
         super().__init__()
-        self.type = _ChuckModuleType.IN
+        self.prev = []
 
-        self.ready = threading.Event()
-        self.go = threading.Event()
-        self.buffer = np.zeros(self.buffer_size * 2, dtype=np.float32)
-        self.i = 0
-
-        self.stream = sd.OutputStream(
-            samplerate=self.sample_rate,
-            blocksize=self.buffer_size,
-            channels=1,
-            dtype=np.float32,
-            callback=self.callback)
-
-    def __str__(self):
+    def __repr__(self):
         return 'dac'
 
-    def callback(self, outdata, frames, time, status):
-        # wait for chuck
-        self.ready.wait()
-        # copy
-        outdata[:] = self.buffer[:frames].reshape(-1, 1)
-        # roll
-        self.i -= frames
-        self.buffer[:self.i] = self.buffer[frames:frames + self.i]
-        # notify chuck
-        self.ready.clear()
-        self.go.set()
+    def _prev(self, other: '_ChuckModule'):
+        pychuck.__CHUCK__.current_shred.modules['dac'].append(other)
+        self.prev.append(other)
 
-    def compute(self, length: int):
-        self.buffer[self.i:self.i + length] = 0
-        for module in self.modules:
-            self.buffer[self.i:self.i + length] += module.compute(length)
-        self.i += length
-        if self.i >= self.buffer_size:
-            self.ready.set()
-            self.go.wait()
-            self.go.clear()
-
-    def debug(self):
-        print([str(module) for module in self.modules])
+    def compute(self, frames: int):
+        if self.computed:
+            return
+        self.computed = True
+        self.buffer.fill(0)
+        for module in self.prev:
+            module.compute(frames)
+            self.buffer[:frames] += module.buffer[:frames]
 
 
-class _Blackhole(_ChuckGlobalModule):
+class _Blackhole(_ChuckModule):
     def __init__(self):
         super().__init__()
-        self.type = _ChuckModuleType.IN
+        self.prev = []
 
-    def __str__(self):
+    def __repr__(self):
         return 'blackhole'
 
-    def compute(self, length: int):
-        # TODO: implement
-        pass
+    def _prev(self, other: '_ChuckModule'):
+        pychuck.__CHUCK__.current_shred.modules['blackhole'].append(other)
+        self.prev.append(other)
+
+    def compute(self, frames: int):
+        if self.computed:
+            return
+        self.computed = True
+        for module in self.prev:
+            module.compute(frames)
 
 
 class SinOsc(_ChuckModule):
-    def __init__(self, freq: float = 440):
+    def __init__(self, freq: float = 440.0):
         super().__init__()
-        self.type = _ChuckModuleType.OUT
         self.next = []
         self.freq = freq
+        self.phi = -np.pi * 0.5
 
-    def __str__(self):
-        return f'SinOsc({self.freq})'
+    def __repr__(self):
+        return f"SinOsc(freq={self.freq:.2f})"
 
-    def compute(self, length: int):
-        phi = self.now.sample_count / self.sample_rate * 2 * np.pi * self.freq
-        output = librosa.tone(self.freq, sr=self.sample_rate, length=length, phi=phi)
-        return output
-
-
-class SndBuf(_ChuckModule):
-    def __init__(self, filename: str = None):
-        super().__init__()
-        self.type = _ChuckModuleType.OUT
-        self.next = []
-        self.filename = filename
-        self.data = None
-        self.pos = 0
-
-    def __str__(self):
-        return f'SndBuf({self.filename.split("/")[-1]})'
-
-    def read(self, filename: str):
-        self.filename = filename
-        self.data, _ = librosa.load(filename, sr=self.sample_rate)
-        self.pos = 0
-
-    def compute(self, length: int):
-        output = np.zeros(length, dtype=np.float32)
-        if self.pos > len(self.data):
-            return output
-        output[:len(self.data) - self.pos] = self.data[self.pos:self.pos + length]
-        self.pos += length
+    def compute(self, frames: int):
+        if self.computed:
+            return
+        self.computed = True
+        self.buffer[:frames] = librosa.tone(self.freq, sr=self.sample_rate, length=frames, phi=self.phi)
+        self.phi += 2 * np.pi * self.freq * frames / self.sample_rate
+        for module in self.next:
+            module.compute(frames)

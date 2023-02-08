@@ -1,137 +1,132 @@
 import pychuck
-from pychuck.module import _ChuckGlobalModule, _ChuckModule, _ADC, _DAC, _Blackhole
+from pychuck.module import _ADC, _DAC, _Blackhole
 from pychuck.util import _ChuckNow
 
-import time
+import os
+import queue
 import threading
+import numpy as np
+import sounddevice as sd
 
 
-def spork(func, *args):
-    threading.Thread(target=pychuck.__CHUCK__.exec, args=(func, *args)).start()
+def spork(obj):
+    pychuck.__CHUCK__.queue.put_nowait(obj)
 
 
-class _ChuckThread:
-    def __init__(self, thread: threading.Thread):
-        self.ready = threading.Event()
-        self.go = threading.Event()
-        self.sample_request = 0
-        self.links = []  # remember thread modules connected to global modules
-        thread.instance = self
+class _ChuckShred:
+    def __init__(self, generator):
+        pychuck.__CHUCK__.current_shred = self
+        self.modules = {'adc': [], 'dac': [], 'blackhole': []}
+        self.generator = generator()
+        dur = next(self.generator)
+        if dur is None:
+            self.disconnect()
+        else:
+            self.frames = dur.frames
+            pychuck.__CHUCK__.shreds.append(self)
 
-    def remember(self, global_module: _ChuckGlobalModule, module: _ChuckModule):
-        self.links.append((global_module, module))
+    def disconnect(self):
+        for module in self.modules['adc']:
+            pychuck.adc.next.remove(module)
+        for module in self.modules['dac']:
+            pychuck.dac.prev.remove(module)
+        for module in self.modules['blackhole']:
+            pychuck.blackhole.prev.remove(module)
 
-    def remove(self):
-        for global_module, module in self.links:
-            global_module.remove(module)
-        self.links = []
-        self.ready.set()
-
-    def wait(self, sample_request: int):
-        self.sample_request = sample_request
-        self.ready.set()
-        self.go.wait()
-        self.go.clear()
-
-
-class _ChuckThreadList:
-    def __init__(self):
-        self.threads = []
-        self.lock = threading.Lock()
-
-    def add(self, thread: threading.Thread):
-        with self.lock:
-            self.threads.append(_ChuckThread(thread))
-
-    def remove(self, thread: threading.Thread):
-        with self.lock:
-            self.threads.remove(thread.instance)
-            thread.instance.remove()
-
-    def debug(self):
-        print([thread.sample_request for thread in self.threads])
+    def update(self, frames: int):
+        self.frames -= frames
+        if self.frames == 0:
+            pychuck.__CHUCK__.current_shred = self
+            dur = next(self.generator)
+            if dur is None:
+                self.disconnect()
+                pychuck.__CHUCK__.shreds.remove(self)
+            else:
+                self.frames = dur.frames
 
 
 class _Chuck:
-    def __init__(self, sample_rate=22050, buffer_size=256, verbose=False):
-        pychuck.__CHUCK__ = self
-        # options
+    def __init__(self, sample_rate: int = 22050, buffer_size: int = 64, verbose: bool = False):
         self.sample_rate = sample_rate
         self.buffer_size = buffer_size
         self.verbose = verbose
-        # members
-        self.thread_list = _ChuckThreadList()
-        self.now = _ChuckNow()
-        self.adc = _ADC()
-        self.dac = _DAC()
-        self.blackhole = _Blackhole()
-        # global
+
+        self.stream = sd.Stream(samplerate=self.sample_rate, blocksize=self.buffer_size, channels=1, dtype='float32',
+                                callback=self.callback)
+
+        self.queue = queue.Queue()
+
+        self.shreds = []
+        self.current_shred = None
+        self.shred_id = 0
+
+        self.ready = threading.Event()
+        self.ready.set()
+        self.go = threading.Event()
+
+        self.in_buffer = np.zeros(self.buffer_size, dtype='float32')
+        self.out_buffer = np.zeros(self.buffer_size, dtype='float32')
+
         self.init_global()
 
-    def __str__(self):
-        return f"Chuck(sample_rate={self.sample_rate}, buffer_size={self.buffer_size})"
-
     def init_global(self):
-        pychuck.now = self.now
-        pychuck.adc = self.adc
-        pychuck.dac = self.dac
-        pychuck.blackhole = self.blackhole
+        pychuck.__CHUCK__ = self
+        pychuck.now = _ChuckNow()
+        pychuck.adc = _ADC()
+        pychuck.dac = _DAC()
+        pychuck.blackhole = _Blackhole()
 
-    def loop(self):
-        if self.verbose:
-            print(f"{self} start ...")
+    def filepath2generator(self, file: str):
+        exec(open(file).read().replace("def main():", f"def _shred_{self.shred_id}():"), globals())
+        self.shred_id += 1
+        return globals()[f"_shred_{self.shred_id - 1}"]
 
-        while True:
-            # block upcoming threads
-            self.thread_list.lock.acquire()
+    def clear(self):
+        pychuck.adc.clear()
+        pychuck.dac.clear()
+        pychuck.blackhole.clear()
 
-            # no threads
-            if len(self.thread_list.threads) == 0:
-                self.thread_list.lock.release()
-                time.sleep(0.1)
-                continue
+    def compute(self, frames: int):
+        pychuck.adc.compute(frames)
+        pychuck.dac.compute(frames)
+        pychuck.blackhole.compute(frames)
 
-            # thread not ready
-            thread_not_ready = next((thread for thread in self.thread_list.threads if not thread.ready.is_set()), None)
-            if thread_not_ready is not None:
-                self.thread_list.lock.release()
-                thread_not_ready.ready.wait()
-                continue
-
-            # all threads ready
-            if self.verbose:
-                self.debug()
-
-            # compute
-            sample_request = min(self.buffer_size, min(thread.sample_request for thread in self.thread_list.threads))
-            self.compute(sample_request)
-
-            # update time and threads
-            self.now.sample_count += sample_request
-            for thread in self.thread_list.threads:
-                thread.sample_request -= sample_request
-                if thread.sample_request < 1:
-                    thread.ready.clear()
-                    thread.go.set()
-
-            # unblock upcoming threads
-            self.thread_list.lock.release()
-
-    def compute(self, sample_request):
-        self.dac.compute(sample_request)
-        self.blackhole.compute(sample_request)
-        self.adc.compute(sample_request)
-
-    def exec(self, func, *args):
-        self.thread_list.add(threading.current_thread())
-        func(*args)
-        self.thread_list.remove(threading.current_thread())
+    def callback(self, indata, outdata, frames, time, status):
+        self.ready.wait()
+        self.ready.clear()
+        outdata[:, 0] = self.out_buffer
+        self.in_buffer[:] = indata[:, 0]
+        self.go.set()
 
     def start(self):
-        threading.Thread(target=self.loop).start()
-
-    def debug(self):
-        print("Graph:")
-        self.dac.debug()
-        print("Threads:")
-        self.thread_list.debug()
+        self.stream.start()
+        while True:
+            self.go.wait()
+            self.go.clear()
+            fi = 0
+            frames_left = self.buffer_size
+            while frames_left > 0:
+                # add shreds
+                while not self.queue.empty():
+                    obj = self.queue.get_nowait()
+                    if isinstance(obj, str):
+                        obj = self.filepath2generator(obj)
+                    _ChuckShred(obj)
+                # print
+                if self.verbose:
+                    print(self.shreds[0].frames)
+                    print(pychuck.dac.prev)
+                # clear
+                self.clear()
+                # compute
+                frames = min(frames_left, min(shred.frames for shred in self.shreds))
+                pychuck.adc.buffer[:frames] = self.in_buffer[fi:fi + frames]
+                self.compute(frames)
+                self.out_buffer[fi:fi + frames] = pychuck.dac.buffer[:frames]
+                # update
+                for shred in self.shreds:
+                    shred.update(frames)
+                pychuck.now.frame += frames
+                fi += frames
+                frames_left -= frames
+            self.ready.set()

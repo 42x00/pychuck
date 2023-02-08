@@ -1,9 +1,10 @@
-from pychuck import *
 import random
+from pychuck import *
 
-s = SinOsc()
-s >> dac
 
-while True:
-    s.freq = random.randrange(30, 1000)
-    Dur(1, "samp") >> now
+def main():
+    s = SinOsc()
+    s >> dac
+    while True:
+        s.freq = random.uniform(30, 1000)
+        yield Dur(1, "samp")
