@@ -9,17 +9,15 @@ PyChuck is a Python Library for the [ChucK](http://chuck.cs.princeton.edu/) prog
 ```python
 from pychuck import *
 
+# compute parameters
+freq = 440
 
-def main():
-    # compute parameters
-    freq = 440
+# define chuck module and graph
+s = SinOsc(freq)
+s >> dac
 
-    # define chuck module and graph
-    s = SinOsc(freq)
-    s >> dac
-
-    # time control
-    yield Dur(1, "s")
+# time control
+Dur(1, "s") >> now
 ```
 
 ### Quickstart

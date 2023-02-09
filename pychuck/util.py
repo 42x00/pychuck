@@ -1,6 +1,7 @@
 import pychuck
 
 import ast
+import types
 from enum import Enum
 
 
@@ -13,25 +14,53 @@ class _ChuckDurUnit(Enum):
     week = 604800
 
 
-class Dur:
+class _ChuckDur:
     def __init__(self, dur: float, unit: str = 's'):
-        self.frames = dur * pychuck.__CHUCK__.sample_rate
         if unit == 'samp':
             self.frames = int(dur)
         elif unit in _ChuckDurUnit.__members__:
-            self.frames = int(self.frames * _ChuckDurUnit[unit].value)
+            self.frames = int(dur * pychuck.__CHUCK__.sample_rate * _ChuckDurUnit[unit].value)
         else:
             raise ValueError(f'Invalid time unit: {unit}')
-        if self.frames <= 0:
-            raise ValueError(f'Duration must be positive, but got {dur} {unit}')
+
+    def __truediv__(self, other: '_ChuckDur'):
+        return self.frames / other.frames
+
+    def __mul__(self, other: float):
+        return _ChuckDur(self.frames * other, 'samp')
 
     def __rshift__(self, other):
         pass
 
 
-class _ChuckNow:
-    def __init__(self):
+class _ChuckTime:
+    def __init__(self, other: '_ChuckTime' = None):
         self.frame = 0
+        if other is not None:
+            self.frame = other.frame
+
+    def __le__(self, other: '_ChuckTime'):
+        return self.frame <= other.frame
+
+    def __lt__(self, other: '_ChuckTime'):
+        return self.frame < other.frame
+
+    def __ge__(self, other: '_ChuckTime'):
+        return self.frame >= other.frame
+
+    def __gt__(self, other: '_ChuckTime'):
+        return self.frame > other.frame
+
+    def __sub__(self, other: '_ChuckTime'):
+        return _ChuckDur(self.frame - other.frame, 'samp')
+
+
+class Time(_ChuckTime):
+    pass
+
+
+class Dur(_ChuckDur):
+    pass
 
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
@@ -46,8 +75,22 @@ class _ChuckCodeTransformer(ast.NodeTransformer):
 
 
 def _code_transform(code: str, shred_id: int):
-    main_tree = ast.parse(f'from pychuck import *\ndef _chuck_shred_{shred_id}(): pass')
+    main_tree = ast.parse(f'from pychuck import *\ndef _shred_{shred_id}(): pass')
     tree = ast.parse(code)
     ast.fix_missing_locations(_ChuckCodeTransformer().visit(tree))
     main_tree.body[1].body = tree.body
     return ast.unparse(main_tree)
+
+
+# def _code_transform(code: str, shred_id: int):
+#     return code.replace('def main():', f'def _shred_{shred_id}():')
+
+
+def _code2gen(code_or_gen: str or types.GeneratorType, shred_id: int):
+    # check
+    if code_or_gen is None or isinstance(code_or_gen, types.GeneratorType):
+        return code_or_gen
+    # compile
+    exec(_code_transform(code_or_gen, shred_id), globals())
+    # return generator
+    return globals()[f'_shred_{shred_id}']()

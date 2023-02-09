@@ -1,6 +1,5 @@
-import time
 import argparse
-from pychuck.core import _Chuck, spork
+from pychuck.core import _Chuck
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -13,6 +12,6 @@ if __name__ == '__main__':
     app = _Chuck(sample_rate=args.srate, buffer_size=args.bufsize, verbose=args.verbose)
 
     for file in args.files:
-        spork(file)
+        app.add_shred(open(file).read())
 
     app.start()
