@@ -1,8 +1,7 @@
 import pychuck
 from pychuck.module import _ADC, _DAC, _Blackhole
-from pychuck.util import _ChuckNow
+from pychuck.util import _ChuckNow, _code_transform
 
-import os
 import queue
 import threading
 import numpy as np
@@ -14,11 +13,14 @@ def spork(obj):
 
 
 class _ChuckShred:
-    def __init__(self, generator):
-        pychuck.__CHUCK__.current_shred = self
+    def __init__(self, obj):
         self.modules = {'adc': [], 'dac': [], 'blackhole': []}
-        self.generator = generator()
-        dur = next(self.generator)
+
+        if isinstance(obj, str):
+            obj = self.filepath2generator(obj)
+        self.generator = obj()
+
+        dur = self.next()
         if dur is None:
             self.disconnect()
         else:
@@ -36,13 +38,30 @@ class _ChuckShred:
     def update(self, frames: int):
         self.frames -= frames
         if self.frames == 0:
-            pychuck.__CHUCK__.current_shred = self
-            dur = next(self.generator)
+            dur = self.next()
             if dur is None:
                 self.disconnect()
                 pychuck.__CHUCK__.shreds.remove(self)
             else:
                 self.frames = dur.frames
+
+    def next(self):
+        pychuck.__CHUCK__.current_shred = self
+        while True:
+            try:
+                dur = next(self.generator)
+                if dur is None:
+                    continue
+                return dur
+            except StopIteration:
+                return None
+
+    def filepath2generator(self, filepath):
+        pychuck.__CHUCK__.current_shred = self
+        shred_id = pychuck.__CHUCK__.get_shred_id()
+        code = _code_transform(open(filepath).read(), shred_id)
+        exec(code, globals())
+        return globals()[f'_chuck_shred_{shred_id}']
 
 
 class _Chuck:
@@ -76,10 +95,9 @@ class _Chuck:
         pychuck.dac = _DAC()
         pychuck.blackhole = _Blackhole()
 
-    def filepath2generator(self, file: str):
-        exec(open(file).read().replace("def main():", f"def _shred_{self.shred_id}():"), globals())
+    def get_shred_id(self):
         self.shred_id += 1
-        return globals()[f"_shred_{self.shred_id - 1}"]
+        return self.shred_id - 1
 
     def clear(self):
         pychuck.adc.clear()
@@ -108,10 +126,7 @@ class _Chuck:
             while frames_left > 0:
                 # add shreds
                 while not self.queue.empty():
-                    obj = self.queue.get_nowait()
-                    if isinstance(obj, str):
-                        obj = self.filepath2generator(obj)
-                    _ChuckShred(obj)
+                    _ChuckShred(self.queue.get_nowait())
                 # print
                 if self.verbose:
                     print(self.shreds[0].frames)

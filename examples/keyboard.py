@@ -1,13 +1,9 @@
 from pychuck import *
+
 from pynput import keyboard
 from numpy import interp
 
 s = SinOsc()
-
-
-def main():
-    s >> dac
-    yield Dur(1, "day")
 
 
 def on_press(key):
@@ -17,3 +13,6 @@ def on_press(key):
 
 listener = keyboard.Listener(on_press=on_press)
 listener.start()
+
+s >> dac
+Dur(1, "day") >> now
