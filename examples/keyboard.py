@@ -4,6 +4,7 @@ from pynput import keyboard
 from numpy import interp
 
 s = SinOsc()
+s >> dac
 
 
 def on_press(key):
@@ -14,5 +15,4 @@ def on_press(key):
 listener = keyboard.Listener(on_press=on_press)
 listener.start()
 
-s >> dac
 Dur(1, "day") >> now

@@ -1,8 +1,7 @@
-import pychuck
-
 import ast
-import types
 from enum import Enum
+
+import pychuck
 
 
 class _ChuckDurUnit(Enum):
@@ -17,17 +16,17 @@ class _ChuckDurUnit(Enum):
 class _ChuckDur:
     def __init__(self, dur: float, unit: str = 's'):
         if unit == 'samp':
-            self.frames = int(dur)
+            self._frames = int(dur)
         elif unit in _ChuckDurUnit.__members__:
-            self.frames = int(dur * pychuck.__CHUCK__.sample_rate * _ChuckDurUnit[unit].value)
+            self._frames = int(dur * pychuck.__CHUCK__._sample_rate * _ChuckDurUnit[unit].value)
         else:
             raise ValueError(f'Invalid time unit: {unit}')
 
     def __truediv__(self, other: '_ChuckDur'):
-        return self.frames / other.frames
+        return self._frames / other._frames
 
     def __mul__(self, other: float):
-        return _ChuckDur(self.frames * other, 'samp')
+        return _ChuckDur(self._frames * other, 'samp')
 
     def __rshift__(self, other):
         pass
@@ -35,24 +34,24 @@ class _ChuckDur:
 
 class _ChuckTime:
     def __init__(self, other: '_ChuckTime' = None):
-        self.frame = 0
+        self._frame = 0
         if other is not None:
-            self.frame = other.frame
+            self._frame = other._frame
 
     def __le__(self, other: '_ChuckTime'):
-        return self.frame <= other.frame
+        return self._frame <= other._frame
 
     def __lt__(self, other: '_ChuckTime'):
-        return self.frame < other.frame
+        return self._frame < other._frame
 
     def __ge__(self, other: '_ChuckTime'):
-        return self.frame >= other.frame
+        return self._frame >= other._frame
 
     def __gt__(self, other: '_ChuckTime'):
-        return self.frame > other.frame
+        return self._frame > other._frame
 
     def __sub__(self, other: '_ChuckTime'):
-        return _ChuckDur(self.frame - other.frame, 'samp')
+        return _ChuckDur(self._frame - other._frame, 'samp')
 
 
 class Time(_ChuckTime):
@@ -64,33 +63,21 @@ class Dur(_ChuckDur):
 
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
+    # Dur(1, 's') >> now -> yield Dur(1, 's')
     def visit_BinOp(self, node):
         if isinstance(node.op, ast.RShift) and isinstance(node.right, ast.Name) and node.right.id == 'now':
             return ast.Yield(node.left)
         return node
 
+    # delete: from pychuck import *
     def visit_ImportFrom(self, node):
         if node.module != 'pychuck' or node.names[0].name != '*':
             return node
 
 
-def _code_transform(code: str, shred_id: int):
-    main_tree = ast.parse(f'from pychuck import *\ndef _shred_{shred_id}(): pass')
-    tree = ast.parse(code)
-    ast.fix_missing_locations(_ChuckCodeTransformer().visit(tree))
-    main_tree.body[1].body = tree.body
-    return ast.unparse(main_tree)
-
-
-# def _code_transform(code: str, shred_id: int):
-#     return code.replace('def main():', f'def _shred_{shred_id}():')
-
-
-def _code2gen(code_or_gen: str or types.GeneratorType, shred_id: int):
-    # check
-    if code_or_gen is None or isinstance(code_or_gen, types.GeneratorType):
-        return code_or_gen
-    # compile
-    exec(_code_transform(code_or_gen, shred_id), globals())
-    # return generator
-    return globals()[f'_shred_{shred_id}']()
+def _code_transform(code: str) -> str:
+    wrapper_tree = ast.parse(f'from pychuck import *\ndef __chuck_shred__(): pass')
+    code_tree = ast.parse(code)
+    ast.fix_missing_locations(_ChuckCodeTransformer().visit(code_tree))
+    wrapper_tree.body[1].body = code_tree.body
+    return ast.unparse(wrapper_tree)

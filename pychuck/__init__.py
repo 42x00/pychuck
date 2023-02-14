@@ -1,6 +1,6 @@
-from pychuck.core import spork
-from pychuck.module import SinOsc, Noise, TwoPole
-from pychuck.util import Dur, Time
+from pychuck.core import *
+from pychuck.module import *
+from pychuck.util import *
 
 __CHUCK__ = None
 now = None

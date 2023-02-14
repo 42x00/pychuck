@@ -1,25 +1,16 @@
-import pychuck
-
 import librosa
 import numpy as np
-from enum import Enum
 
-
-class _ChuckModuleType(Enum):
-    IN = 0  # dac, blackhole, etc.
-    OUT = 1  # adc, SinOsc, etc.
-    IN_OUT = 2  # FFT, etc.
+import pychuck
 
 
 class _ChuckModule:
     def __init__(self):
         # global
-        self._now = pychuck.now
-        self._sample_rate = pychuck.__CHUCK__.sample_rate
-        self._buffer_size = pychuck.__CHUCK__.buffer_size
-        pychuck.__CHUCK__.current_shred.modules.append(self)
+        self._sample_rate = pychuck.__CHUCK__._sample_rate
+        self._buffer_size = pychuck.__CHUCK__._buffer_size
+        pychuck.__CHUCK__._current_shred._modules.append(self)
         # content
-        self._type = None
         self._computed = False
         self.buffer = np.zeros(self._buffer_size, dtype=np.float32)
 
@@ -27,32 +18,23 @@ class _ChuckModule:
         return f'{self.__class__.__name__}()'
 
     def __rshift__(self, other: '_ChuckModule'):
-        if self._type == _ChuckModuleType.IN or other._type == _ChuckModuleType.OUT:
-            raise TypeError(f'Cannot connect {self} to {other}')
         self._next.append(other)
         other._prev.append(self)
         return other
 
     def __lshift__(self, other: '_ChuckModule'):
-        if self._type == _ChuckModuleType.IN or other._type == _ChuckModuleType.OUT:
-            raise TypeError(f'Cannot disconnect {self} from {other}')
+        if other not in self._next:
+            raise ValueError(f'{other} is not connected to {self}')
         self._next.remove(other)
         other._prev.remove(self)
 
-    def _update_type(self, type_: _ChuckModuleType):
-        self._type = type_
-        if self._type != _ChuckModuleType.IN:
-            self._next = []
-        if self._type != _ChuckModuleType.OUT:
-            self._prev = []
-
     def _remove(self):
-        if self._type != _ChuckModuleType.IN:
+        if hasattr(self, '_next'):
             for module in self._next:
-                module._prev.remove(self)
-        if self._type != _ChuckModuleType.OUT:
+                module._prev._remove(self)
+        if hasattr(self, '_prev'):
             for module in self._prev:
-                module._next.remove(self)
+                module._next._remove(self)
 
     def compute(self, start: int, end: int):
         pass
@@ -61,43 +43,54 @@ class _ChuckModule:
         if self._computed:
             return
         self._computed = True
-        if self._type != _ChuckModuleType.OUT:
+        if hasattr(self, '_prev'):
             for module in self._prev:
                 module._compute(start, end)
         self.compute(start, end)
-        if self._type != _ChuckModuleType.IN:
+        if hasattr(self, '_next'):
             for module in self._next:
                 module._compute(start, end)
 
 
-class _ADC(_ChuckModule):
+class _ChuckInModule(_ChuckModule):
     def __init__(self):
         super().__init__()
-        self._update_type(_ChuckModuleType.OUT)
+        self._prev = []
 
 
-class _DAC(_ChuckModule):
+class _ChuckOutModule(_ChuckModule):
     def __init__(self):
         super().__init__()
-        self._update_type(_ChuckModuleType.IN)
+        self._next = []
 
+
+class _ChuckInOutModule(_ChuckModule):
+    def __init__(self):
+        super().__init__()
+        self._prev = []
+        self._next = []
+
+
+class _ADC(_ChuckOutModule):
+    def __init__(self):
+        super().__init__()
+        self._computed = True
+
+
+class _DAC(_ChuckInModule):
     def compute(self, start: int, end: int):
         self.buffer.fill(0)
         for module in self._prev:
             self.buffer += module.buffer
 
 
-class _Blackhole(_ChuckModule):
-    def __init__(self):
-        super().__init__()
-        self._update_type(_ChuckModuleType.IN)
+class _Blackhole(_ChuckInModule):
+    pass
 
 
-class SinOsc(_ChuckModule):
+class SinOsc(_ChuckOutModule):
     def __init__(self, freq: float = 440.0):
         super().__init__()
-        self._update_type(_ChuckModuleType.OUT)
-
         self.freq = freq
         self.phi = -np.pi * 0.5
 
@@ -110,20 +103,14 @@ class SinOsc(_ChuckModule):
         self.phi += 2 * np.pi * self.freq * length / self._sample_rate
 
 
-class Noise(_ChuckModule):
-    def __init__(self):
-        super().__init__()
-        self._update_type(_ChuckModuleType.OUT)
-
+class Noise(_ChuckOutModule):
     def compute(self, start: int, end: int):
         self.buffer[start:end] = np.random.uniform(-1, 1, end - start)
 
 
-class TwoPole(_ChuckModule):
+class TwoPole(_ChuckInOutModule):
     def __init__(self):
         super().__init__()
-        self._update_type(_ChuckModuleType.IN_OUT)
-
         self.norm = 0.0
         self.gain = 0.0
         self.freq = 0.0

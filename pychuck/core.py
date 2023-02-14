@@ -1,140 +1,142 @@
-import pychuck
-from pychuck.module import _ADC, _DAC, _Blackhole
-from pychuck.util import _ChuckTime, _code2gen
-
-import types
 import queue
 import threading
+import types
+
 import sounddevice as sd
+
+import pychuck
+from pychuck.module import _ADC, _DAC, _Blackhole
+from pychuck.util import _ChuckTime, _code_transform
 
 
 def spork(generator):
-    current_shred = pychuck.__CHUCK__.current_shred
-    current_shred.sporks.append(_ChuckShred(generator))
-    pychuck.__CHUCK__.current_shred = current_shred
+    current_shred = pychuck.__CHUCK__._current_shred
+    current_shred._sporks.append(_ChuckShred(generator))
+    pychuck.__CHUCK__._current_shred = current_shred
 
 
 class _ChuckShred:
-    def __init__(self, code_or_gen: str or types.GeneratorType = None):
+    def __init__(self, generator: types.GeneratorType = None):
         # content
-        self.shred_id = pychuck.__CHUCK__.get_shred_id()
-        self.frames = 0
-        self.modules = []
-        self.sporks = []
+        self._frames = 0
+        self._modules = []
+        self._sporks = []
+        self._generator = generator
         # init
-        self.generator = _code2gen(code_or_gen, self.shred_id)
-        if self.next():
-            pychuck.__CHUCK__.shreds.append(self)
+        if self._generator is not None and self._next():
+            pychuck.__CHUCK__._shreds.append(self)
 
-    def next(self):
-        pychuck.__CHUCK__.current_shred = self
+    def _next(self):
+        pychuck.__CHUCK__._current_shred = self
         try:
-            dur = next(self.generator)
-            if dur.frames <= 0:
+            dur = next(self._generator)
+            if dur._frames <= 0:
                 raise ValueError("Duration must be greater than 0")
-            self.frames = dur.frames
+            self._frames = dur._frames
             return True
-        except (StopIteration, TypeError):
-            self.remove()
+        except StopIteration:
+            self._remove()
             return False
 
-    def remove(self):
-        for shred in self.sporks:
-            shred.remove()
-        for module in self.modules:
+    def _remove(self):
+        for shred in self._sporks:
+            shred._remove()
+        for module in self._modules:
             module._remove()
 
-    def update(self, frames: int):
-        self.frames -= frames
-        if self.frames == 0:
-            if not self.next():
-                pychuck.__CHUCK__.shreds.remove(self)
-
-    def uncompute_modules(self):
-        for module in self.modules:
-            module._computed = False
-
-    def compute_modules(self, start: int, end: int):
-        for module in self.modules:
-            module._compute(start, end)
+    def _update(self, frames: int):
+        self._frames -= frames
+        if self._frames == 0:
+            if not self._next():
+                pychuck.__CHUCK__._shreds._remove(self)
 
 
 class _Chuck:
     def __init__(self, sample_rate: int = 22050, buffer_size: int = 64, verbose: bool = False):
         pychuck.__CHUCK__ = self
         # options
-        self.sample_rate = sample_rate
-        self.buffer_size = buffer_size
-        self.verbose = verbose
+        self._sample_rate = sample_rate
+        self._buffer_size = buffer_size
+        self._verbose = verbose
         # stream
-        self.stream = sd.Stream(samplerate=self.sample_rate, blocksize=self.buffer_size, channels=1, dtype='float32',
-                                callback=self.callback)
-        self.ready = threading.Event()
-        self.go = threading.Event()
+        self._stream = sd.Stream(samplerate=self._sample_rate, blocksize=self._buffer_size, channels=1, dtype='float32',
+                                 callback=self._callback)
+        self._ready = threading.Event()
+        self._go = threading.Event()
         # shreds
-        self.queue = queue.Queue()
-        self.shreds = []
-        self.shred_id = 0
-        self.shred = _ChuckShred()
-        self.current_shred = self.shred
+        self._queue = queue.Queue()
+        self._shreds = []
+        self._current_shred = _ChuckShred()
         # global
-        pychuck.now = self.now = _ChuckTime()
-        pychuck.adc = self.adc = _ADC()
-        pychuck.dac = self.dac = _DAC()
-        pychuck.blackhole = self.blackhole = _Blackhole()
+        self._init_global()
 
-    def get_shred_id(self):
-        self.shred_id += 1
-        return self.shred_id - 1
+    def _init_global(self):
+        pychuck.now = _ChuckTime()
+        pychuck.adc = _ADC()
+        pychuck.dac = _DAC()
+        pychuck.blackhole = _Blackhole()
 
-    def compute_graph(self, start: int, end: int):
+    def _compute_graph(self, start: int, end: int):
         # un-compute
-        for shred in self.shreds:
-            shred.uncompute_modules()
-        self.shred.uncompute_modules()
+        for shred in self._shreds:
+            for module in shred._modules:
+                module._computed = False
+        pychuck.dac._computed = False
+        pychuck.blackhole._computed = False
         # compute
-        self.shred.compute_modules(start, end)
+        for shred in self._shreds:
+            for module in shred._modules:
+                module._compute(start, end)
 
-    def callback(self, indata, outdata, frames, time, status):
-        self.ready.wait()
-        self.ready.clear()
-        outdata[:, 0] = self.dac.buffer
-        self.adc.buffer[:] = indata[:, 0]
-        self.go.set()
+    def _callback(self, indata, outdata, frames, time, status):
+        self._ready.wait()
+        self._ready.clear()
+        outdata[:, 0] = pychuck.dac.buffer
+        pychuck.adc.buffer[:] = indata[:, 0]
+        self._go.set()
 
     def start(self):
-        print(f'Chuck:\n    sample_rate: {self.sample_rate}\n    buffer_size: {self.buffer_size}')
-        self.ready.set()
-        self.stream.start()
+        print(f'Chuck:\n    sample_rate: {self._sample_rate}\n    buffer_size: {self._buffer_size}')
+        self._ready.set()
+        self._stream.start()
         while True:
-            self.go.wait()
-            self.go.clear()
+            self._go.wait()
+            self._go.clear()
             fi = 0
-            frames_left = self.buffer_size
+            frames_left = self._buffer_size
             while frames_left > 0:
                 # add shreds
-                while not self.queue.empty():
-                    _ChuckShred(self.queue.get_nowait())
+                while not self._queue.empty():
+                    _ChuckShred(self._queue.get())
                 # debug
-                if self.verbose:
-                    self.debug()
+                if self._verbose:
+                    self._debug()
                 # compute
-                frames = min(frames_left, min(shred.frames for shred in self.shreds))
-                self.compute_graph(fi, fi + frames)
+                frames = self._get_min_shred_frames(frames_left)
+                self._compute_graph(fi, fi + frames)
                 # update
-                for shred in self.shreds:
-                    shred.update(frames)
-                self.now.frame += frames
+                for shred in self._shreds:
+                    shred._update(frames)
+                pychuck.now._frame += frames
                 fi += frames
                 frames_left -= frames
-            self.ready.set()
+            self._ready.set()
 
     def add_shred(self, code: str):
-        self.queue.put_nowait(code)
+        # TODO: check code
+        exec(_code_transform(code), globals())
+        self._queue.put(globals()["__chuck_shred__"]())
 
-    def debug(self):
+    def _debug(self):
         # shreds
-        for shred in self.shreds:
-            print(f'Shred {shred.shred_id}: {shred.frames} frames left')
+        for shred in self._shreds:
+            print(f'Shred {shred.shred_id}: {shred._frames} frames left')
         # graph
-        print(f'{[module for module in self.dac._prev]} -> dac')
+        print(f'{[module for module in self._dac._prev]} -> dac')
+
+    def _get_min_shred_frames(self, frames_left: int) -> int:
+        frames = frames_left
+        for shred in self._shreds:
+            if shred._frames < frames:
+                frames = shred._frames
+        return frames

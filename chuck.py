@@ -1,4 +1,5 @@
 import argparse
+
 from pychuck.core import _Chuck
 
 if __name__ == '__main__':
