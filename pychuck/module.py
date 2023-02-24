@@ -1,3 +1,4 @@
+import torch
 import librosa
 import numpy as np
 
@@ -115,3 +116,44 @@ class TwoPole(_ChuckInOutModule):
         self.gain = 0.0
         self.freq = 0.0
         self.radius = 0.0
+
+    def compute(self, start: int, end: int):
+        self.buffer[:] = self._prev[0].buffer
+
+
+class Rave(_ChuckInOutModule):
+    def __init__(self):
+        super().__init__()
+        self._model = None
+        self._size = 2048
+        self._in = np.zeros(self._size + self._buffer_size, dtype=np.float32)
+        self._out = np.zeros(2 * self._size, dtype=np.float32)
+        self._fi = 0
+
+    def _forward(self, x: np.ndarray):
+        with torch.no_grad():
+            return self._model.forward(
+                torch.from_numpy(
+                    x.reshape(1, 1, -1)
+                )
+            ).detach().numpy()[0][0]
+
+    def load(self, model_path: str):
+        self._model = torch.jit.load(model_path).eval()
+        self._out[:self._size] = self._forward(self._in[:self._size])
+
+    def compute(self, start: int, end: int):
+        length = end - start
+
+        self._in[self._fi:self._fi + length] = self._prev[0].buffer[start:end]
+
+        if self._fi + length >= self._size:
+            self._out[self._size:] = self._forward(self._in[:self._size])
+
+        self.buffer[start:end] = self._out[self._fi:self._fi + length]
+
+        self._fi += length
+        if self._fi >= self._size:
+            self._fi -= self._size
+            self._in[:self._buffer_size] = self._in[self._size:]
+            self._out[:self._size] = self._out[self._size:]
