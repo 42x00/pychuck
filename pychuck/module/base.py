@@ -36,7 +36,7 @@ class _DAC(_ChuckModule):
         self.buffer[self._i:self._i + frames] = 0
         for module in self._in_modules:
             self.buffer[self._i:self._i + frames] += module._compute(frames)
-        self._i = (self._i + frames) % self._chuck_buffer_size
+        self._i += frames
 
 
 class _ADC(_ChuckModule):

@@ -89,6 +89,7 @@ class _Chuck:
         self._ready.clear()
         outdata[:, 0] = pychuck.dac.buffer
         pychuck.adc.buffer[:] = indata[:, 0]
+        pychuck.adc._i = pychuck.dac._i = 0
         self._go.set()
 
     def start(self):
@@ -103,9 +104,6 @@ class _Chuck:
                 # add shreds
                 while not self._queue.empty():
                     _ChuckShred(self._queue.get())
-                # debug
-                if self._verbose:
-                    self._debug()
                 # compute
                 frames = self._get_min_shred_frames(frames_left)
                 self._compute_graph(frames)
@@ -120,13 +118,6 @@ class _Chuck:
         # TODO: check code
         exec(_code_transform(code), globals())
         self._queue.put(globals()["__chuck_shred__"]())
-
-    def _debug(self):
-        # shreds
-        for shred in self._shreds:
-            print(f'Shred {shred.shred_id}: {shred._frames} frames left')
-        # graph
-        print(f'{[module for module in self._dac._prev]} -> dac')
 
     def _get_min_shred_frames(self, frames_left: int) -> int:
         frames = frames_left
