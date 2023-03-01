@@ -1,5 +1,5 @@
 from pychuck.core import *
-from pychuck.module import *
+from pychuck.module.librosa import *
 from pychuck.util import *
 
 __CHUCK__ = None

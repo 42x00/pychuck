@@ -5,7 +5,7 @@ import types
 import sounddevice as sd
 
 import pychuck
-from pychuck.module import _ADC, _DAC, _Blackhole
+from pychuck.module.base import _ADC, _DAC, _Blackhole
 from pychuck.util import _ChuckTime, _code_transform
 
 
@@ -76,17 +76,13 @@ class _Chuck:
         pychuck.dac = _DAC()
         pychuck.blackhole = _Blackhole()
 
-    def _compute_graph(self, start: int, end: int):
-        # un-compute
+    def _compute_graph(self, frames: int):
         for shred in self._shreds:
             for module in shred._modules:
                 module._computed = False
-        pychuck.dac._computed = False
-        pychuck.blackhole._computed = False
-        # compute
-        for shred in self._shreds:
-            for module in shred._modules:
-                module._compute(start, end)
+        pychuck.adc._computed = False
+        pychuck.blackhole._compute(frames)
+        pychuck.dac._compute(frames)
 
     def _callback(self, indata, outdata, frames, time, status):
         self._ready.wait()
@@ -102,7 +98,6 @@ class _Chuck:
         while True:
             self._go.wait()
             self._go.clear()
-            fi = 0
             frames_left = self._buffer_size
             while frames_left > 0:
                 # add shreds
@@ -113,12 +108,11 @@ class _Chuck:
                     self._debug()
                 # compute
                 frames = self._get_min_shred_frames(frames_left)
-                self._compute_graph(fi, fi + frames)
+                self._compute_graph(frames)
                 # update
                 for shred in self._shreds:
                     shred._update(frames)
                 pychuck.now._frame += frames
-                fi += frames
                 frames_left -= frames
             self._ready.set()
 

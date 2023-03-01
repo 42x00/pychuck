@@ -17,7 +17,7 @@ s = SinOsc(freq)
 s >> dac
 
 # time control
-Dur(1, "s") >> now
+Dur(1, "samp") >> now
 ```
 
 ### Quickstart
@@ -28,6 +28,7 @@ cd pychuck
 
 conda create -y -n pychuck -c conda-forge librosa
 conda activate pychuck
+pip install sounddevice
 
 python chuck.py examples/sinosc.py
 ```

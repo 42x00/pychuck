@@ -1,9 +1,12 @@
 from pychuck import *
 
-s = SinOsc(440)
+s1 = SinOsc(440)
+s2 = SinOsc(441)
 r = Rave()
 
-s >> r >> dac
+s1 >> r
+s2 >> r
+r >> dac
 
 r.load("/Users/ykli/research/pychuck/checkpoints/percussion.ts")
 
