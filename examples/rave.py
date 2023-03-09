@@ -1,13 +1,11 @@
 from pychuck import *
+from pychuck.module.torch import Rave
 
-s1 = SinOsc(440)
-s2 = SinOsc(441)
+s = SinOsc(440)
 r = Rave()
 
-s1 >> r
-s2 >> r
-r >> dac
+s >> r >> dac
 
-r.load("/Users/ykli/research/pychuck/checkpoints/percussion.ts")
+r.load("/Users/ykli/research/pychuck/checkpoints/rave_chafe_data_rt.ts")
 
-Dur(1, "m") >> now
+Dur(1, "day") >> now

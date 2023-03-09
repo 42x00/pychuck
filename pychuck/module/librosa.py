@@ -9,9 +9,10 @@ class SinOsc(_ChuckOutModule):
         super().__init__()
         self.freq = freq
         self.phase = -np.pi * 0.5
+        self.gain = 1.0
 
     def compute(self, frames: int):
-        ret = librosa.tone(self.freq, sr=self._chuck_sample_rate, length=frames, phi=self.phase)
+        ret = librosa.tone(self.freq, sr=self._chuck_sample_rate, length=frames, phi=self.phase) * self.gain
         self.phase += 2 * np.pi * self.freq * frames / self._chuck_sample_rate
         return ret
 

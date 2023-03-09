@@ -48,7 +48,7 @@ class _ChuckShred:
         self._frames -= frames
         if self._frames == 0:
             if not self._next():
-                pychuck.__CHUCK__._shreds._remove(self)
+                pychuck.__CHUCK__._shreds.remove(self)
 
 
 class _Chuck:
