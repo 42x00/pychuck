@@ -157,3 +157,35 @@ class _ChuckBufferInOutModule(_ChuckModule):
 
     def compute(self, input: np.ndarray) -> np.ndarray:
         raise NotImplementedError
+
+
+class _ChuckEnvelope(_ChuckInOutModule):
+    def __init__(self):
+        super().__init__()
+
+        self._sustain_i = 0
+        self._release_i = 0
+        self._off_i = 0
+
+        self._envelope = None
+
+    def keyOn(self):
+        self._i = 0
+
+    def keyOff(self):
+        self._i = self._release_i
+
+    def compute(self, input: np.ndarray) -> np.ndarray:
+        if self._envelope is None:
+            raise RuntimeError(f"Envelope not initialized: call set() first")
+
+        samples = len(input)
+        self._i += samples
+        res = input * self._envelope[self._i - samples:self._i]
+
+        if self._sustain_i < self._i < self._release_i:
+            self._i = self._sustain_i
+        elif self._i > self._off_i:
+            self._i = self._off_i
+
+        return res

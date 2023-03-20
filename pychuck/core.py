@@ -55,7 +55,7 @@ class _ChuckShred:
 
 
 class _Chuck:
-    def __init__(self, sample_rate: int = 22050, buffer_size: int = 64, verbose: bool = False):
+    def __init__(self, sample_rate: int = 44100, buffer_size: int = 256, verbose: bool = False):
         pychuck.__CHUCK__ = self
         # options
         self._sample_rate = sample_rate

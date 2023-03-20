@@ -18,10 +18,8 @@ from pychuck import *
 (s := SinOsc()) >> (e := ADSR()) >> dac
 
 #  set A, D, S, and R
-e.set(A=Dur(10, ms),
-      D=Dur(8, ms),
-      S=0.5,  # (note: A, D, R are durations; S is a number between 0 and 1)
-      R=Dur(500, ms))
+e.set(A=10 * ms, D=8 * ms, S=0.5, R=500 * ms)
+# (note: A, D, R are durations; S is a number between 0 and 1)
 
 #  set gain
 s.gain = 0.5
@@ -38,11 +36,11 @@ while True:
     #  advance time by 500 ms
     #  (note: this is the duration from the
     #         beginning of ATTACK to the end of SUSTAIN)
-    Dur(500, ms) >> now
+    now += 500 * ms
     #  key off; start RELEASE
     e.keyOff()
     #  allow the RELEASE to ramp down to 0
-    e.releaseTime() >> now
+    now += e.releaseTime()
 
     #  advance time by 300 ms (duration until the next sound)
-    Dur(300, ms) >> now
+    now += 300 * ms

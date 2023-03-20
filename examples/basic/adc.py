@@ -8,4 +8,4 @@ adc >> Gain() >> dac
 # infinite time-loop
 while True:
     # advance time
-    Dur(100, ms) >> now
+    now += 100 * ms
