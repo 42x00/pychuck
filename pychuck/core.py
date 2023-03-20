@@ -1,7 +1,10 @@
+import asyncio
 import queue
+import sys
 import threading
 import types
 
+import numpy as np
 import sounddevice as sd
 
 import pychuck
@@ -58,11 +61,6 @@ class _Chuck:
         self._sample_rate = sample_rate
         self._buffer_size = buffer_size
         self._verbose = verbose
-        # stream
-        self._stream = sd.Stream(samplerate=self._sample_rate, blocksize=self._buffer_size, channels=1, dtype='float32',
-                                 callback=self._callback)
-        self._ready = threading.Event()
-        self._go = threading.Event()
         # shreds
         self._queue = queue.Queue()
         self._shreds = []
@@ -84,22 +82,36 @@ class _Chuck:
         pychuck.blackhole._compute(frames)
         pychuck.dac._compute(frames)
 
-    def _callback(self, indata, outdata, frames, time, status):
-        self._ready.wait()
-        self._ready.clear()
-        outdata[:, 0] = pychuck.dac.buffer
-        pychuck.adc.buffer[:] = indata[:, 0]
-        pychuck.adc._i = pychuck.dac._i = 0
-        self._go.set()
+    async def stream_generator(self):
+        q_in = asyncio.Queue()
+        q_out = queue.Queue()
+        loop = asyncio.get_event_loop()
 
-    def start(self):
-        print(f'Chuck:\n    sample_rate: {self._sample_rate}\n    buffer_size: {self._buffer_size}')
-        self._ready.set()
-        self._stream.start()
-        while True:
-            self._go.wait()
-            self._go.clear()
-            frames_left = self._buffer_size
+        def callback(indata, outdata, frame_count, time_info, status):
+            loop.call_soon_threadsafe(q_in.put_nowait, (indata.copy(), status))
+            try:
+                outdata[:] = q_out.get_nowait()
+            except queue.Empty:
+                pass
+
+        stream = sd.Stream(samplerate=self._sample_rate, blocksize=self._buffer_size, dtype=np.float32,
+                           callback=callback)
+        with stream:
+            while True:
+                indata, status = await q_in.get()
+                outdata = np.empty((self._buffer_size, 1), dtype=np.float32)
+                yield indata, outdata, status
+                q_out.put_nowait(outdata)
+
+    async def _main(self):
+        async for indata, outdata, status in self.stream_generator():
+            if status:
+                print(status)
+
+            pychuck.adc.buffer[:] = indata[:, 0]
+            pychuck.adc._i = pychuck.dac._i = 0
+
+            frames_left = outdata.shape[0]
             while frames_left > 0:
                 # add shreds
                 while not self._queue.empty():
@@ -108,11 +120,23 @@ class _Chuck:
                 frames = self._get_min_shred_frames(frames_left)
                 self._compute_graph(frames)
                 # update
-                for shred in self._shreds:
-                    shred._update(frames)
                 pychuck.now._frame += frames
                 frames_left -= frames
-            self._ready.set()
+                for shred in self._shreds:
+                    shred._update(frames)
+
+            outdata[:, 0] = pychuck.dac.buffer
+
+    async def _run(self):
+        asyncio.create_task(self._main())
+        await asyncio.sleep(1e10)
+
+    def start(self):
+        print(f'Chuck:\n    sample_rate: {self._sample_rate}\n    buffer_size: {self._buffer_size}')
+        try:
+            asyncio.run(self._run())
+        except KeyboardInterrupt:
+            sys.exit('\nInterrupted by user')
 
     def add_shred(self, code: str):
         # TODO: check code
