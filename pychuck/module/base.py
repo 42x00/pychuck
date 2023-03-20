@@ -12,17 +12,26 @@ class _ChuckModule:
         # content
         self._computed = False
         self._in_modules = []
+        self._out_modules = []
         self._in_buffer = None
         self.buffer = np.zeros(self._chuck_buffer_size, dtype=np.float32)
         self._i = 0
 
     def __rshift__(self, other: '_ChuckModule'):
+        self._out_modules.append(other)
         other._in_modules.append(self)
         return other
 
     def __lshift__(self, other: '_ChuckModule'):
         if self in other._in_modules:
+            self._out_modules.remove(other)
             other._in_modules.remove(self)
+
+    def _remove(self):
+        for module in self._in_modules:
+            module._out_modules.remove(self)
+        for module in self._out_modules:
+            module._in_modules.remove(self)
 
 
 class _Blackhole(_ChuckModule):
@@ -32,10 +41,15 @@ class _Blackhole(_ChuckModule):
 
 
 class _DAC(_ChuckModule):
+    def __init__(self):
+        super().__init__()
+        self.gain = 1.0
+
     def _compute(self, frames: int):
         self.buffer[self._i:self._i + frames] = 0
         for module in self._in_modules:
             self.buffer[self._i:self._i + frames] += module._compute(frames)
+        self.buffer[self._i:self._i + frames] *= self.gain
         self._i += frames
 
 

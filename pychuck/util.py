@@ -1,72 +1,63 @@
 import ast
-from enum import Enum
 
 import pychuck
 
 
-class _ChuckDurUnit(Enum):
-    ms = 1e-3
-    s = 1
-    m = 60
-    h = 3600
-    day = 86400
-    week = 604800
-
-
 class _ChuckDur:
-    def __init__(self, dur: float, unit: str = 's'):
-        if unit == 'samp':
-            self._frames = int(dur)
-        elif unit in _ChuckDurUnit.__members__:
-            self._frames = int(dur * pychuck.__CHUCK__._sample_rate * _ChuckDurUnit[unit].value)
-        else:
-            raise ValueError(f'Invalid time unit: {unit}')
+    def __init__(self, frames: float):
+        self._frames = frames
 
-    def __truediv__(self, other: '_ChuckDur'):
-        return self._frames / other._frames
+    def __add__(self, other: '_ChuckDur' or '_ChuckTime'):
+        if isinstance(other, _ChuckDur):
+            return _ChuckDur(self._frames + other._frames)
+        elif isinstance(other, _ChuckTime):
+            return _ChuckTime(self._frames + other._frame)
 
     def __mul__(self, other: float):
-        return _ChuckDur(self._frames * other, 'samp')
+        return _ChuckDur(self._frames * other)
 
-    def __rshift__(self, other):
-        pass
+    def __rmul__(self, other: float):
+        return _ChuckDur(other * self._frames)
+
+    def __truediv__(self, other: float):
+        return _ChuckDur(self._frames / other)
 
 
 class _ChuckTime:
-    def __init__(self, other: '_ChuckTime' = None):
-        self._frame = 0
-        if other is not None:
-            self._frame = other._frame
+    def __init__(self, frame: float):
+        self._frame = frame
 
-    def __le__(self, other: '_ChuckTime'):
-        return self._frame <= other._frame
+    def __str__(self):
+        return str(self._frame)
+
+    def __add__(self, other: '_ChuckDur'):
+        if isinstance(other, _ChuckDur):
+            return _ChuckTime(self._frame + other._frames)
 
     def __lt__(self, other: '_ChuckTime'):
         return self._frame < other._frame
 
-    def __ge__(self, other: '_ChuckTime'):
-        return self._frame >= other._frame
-
     def __gt__(self, other: '_ChuckTime'):
         return self._frame > other._frame
 
-    def __sub__(self, other: '_ChuckTime'):
-        return _ChuckDur(self._frame - other._frame, 'samp')
+    def __le__(self, other: '_ChuckTime'):
+        return self._frame <= other._frame
 
+    def __ge__(self, other: '_ChuckTime'):
+        return self._frame >= other._frame
 
-class Time(_ChuckTime):
-    pass
+    def __eq__(self, other: '_ChuckTime'):
+        return self._frame == other._frame
 
-
-class Dur(_ChuckDur):
-    pass
+    def __ne__(self, other: '_ChuckTime'):
+        return self._frame != other._frame
 
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
-    # Dur(1, 's') >> now -> yield Dur(1, 's')
-    def visit_BinOp(self, node):
-        if isinstance(node.op, ast.RShift) and isinstance(node.right, ast.Name) and node.right.id == 'now':
-            return ast.Yield(node.left)
+    # now += 1 * second -> yield 1 * second
+    def visit_AugAssign(self, node):
+        if isinstance(node.op, ast.Add) and isinstance(node.target, ast.Name) and node.target.id == "now":
+            return ast.Expr(value=ast.Yield(value=node.value))
         return node
 
     # delete: from pychuck import *

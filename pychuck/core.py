@@ -9,7 +9,7 @@ import sounddevice as sd
 
 import pychuck
 from pychuck.module.base import _ADC, _DAC, _Blackhole
-from pychuck.util import _ChuckTime, _code_transform
+from pychuck.util import _ChuckTime, _code_transform, _ChuckDur
 
 
 def spork(generator):
@@ -32,10 +32,10 @@ class _ChuckShred:
     def _next(self):
         pychuck.__CHUCK__._current_shred = self
         try:
-            dur = next(self._generator)
-            if dur._frames <= 0:
+            frames = int(next(self._generator)._frames)
+            if frames <= 0:
                 raise ValueError("Duration must be greater than 0")
-            self._frames = dur._frames
+            self._frames = frames
             return True
         except StopIteration:
             self._remove()
@@ -69,10 +69,17 @@ class _Chuck:
         self._init_global()
 
     def _init_global(self):
-        pychuck.now = _ChuckTime()
         pychuck.adc = _ADC()
         pychuck.dac = _DAC()
         pychuck.blackhole = _Blackhole()
+        pychuck.now = _ChuckTime(0)
+        pychuck.samp = _ChuckDur(1)
+        pychuck.second = _ChuckDur(self._sample_rate)
+        pychuck.ms = pychuck.second / 1000
+        pychuck.minute = pychuck.second * 60
+        pychuck.hour = pychuck.minute * 60
+        pychuck.day = pychuck.hour * 24
+        pychuck.week = pychuck.day * 7
 
     def _compute_graph(self, frames: int):
         for shred in self._shreds:

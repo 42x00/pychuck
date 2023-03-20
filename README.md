@@ -17,7 +17,7 @@ s = SinOsc(freq)
 s >> dac
 
 # time control
-Dur(1, "samp") >> now
+now += 1 * samp
 ```
 
 ### Quickstart
