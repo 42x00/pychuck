@@ -1,6 +1,5 @@
 import ast
-
-import pychuck
+import types
 
 
 class _ChuckDur:
@@ -49,6 +48,17 @@ class _ChuckTime:
         elif isinstance(other, _ChuckTime):
             return _ChuckDur(self._frame - other._frame)
 
+    def __truediv__(self, other: '_ChuckDur'):
+        if isinstance(other, _ChuckDur):
+            return self._frame / other._frames
+
+    def __mod__(self, other: '_ChuckDur'):
+        if isinstance(other, _ChuckDur):
+            return _ChuckDur(self._frame % other._frames)
+
+    def __matmul__(self, other: types.GeneratorType):
+        pass
+
     def __lt__(self, other: '_ChuckTime'):
         return self._frame < other._frame
 
@@ -86,6 +96,12 @@ class _ChuckCodeTransformer(ast.NodeTransformer):
     def visit_AugAssign(self, node):
         if isinstance(node.op, ast.Add) and isinstance(node.target, ast.Name) and node.target.id == "now":
             return ast.Expr(value=ast.Yield(value=node.value))
+        return node
+
+    # now @ func -> yield from func
+    def visit_BinOp(self, node):
+        if isinstance(node.op, ast.MatMult) and isinstance(node.left, ast.Name) and node.left.id == "now":
+            return ast.Expr(value=ast.YieldFrom(value=node.right))
         return node
 
     # delete: from pychuck import *

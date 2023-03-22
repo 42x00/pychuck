@@ -1,3 +1,4 @@
+import wave
 import librosa
 import numpy as np
 
@@ -15,14 +16,16 @@ class Gain(_ChuckInOutModule):
 
 
 class SinOsc(_ChuckOutModule):
-    def __init__(self, freq: float = 440.0):
+    def __init__(self, freq: float = 440.0, gain: float = 1.0):
         super().__init__()
         self.freq = freq
+        self.gain = gain
         self.phase = -np.pi * 0.5
-        self.gain = 1.0
+        self.last = 0
 
     def compute(self, frames: int):
         ret = librosa.tone(self.freq, sr=self._chuck_sample_rate, length=frames, phi=self.phase) * self.gain
+        self.last = ret[-1]
         self.phase += 2 * np.pi * self.freq * frames / self._chuck_sample_rate
         return ret
 
@@ -38,6 +41,12 @@ class SndBuf(_ChuckOutModule):
 
     def read(self, filename: str):
         self.data = librosa.load(filename, sr=self._chuck_sample_rate)[0]
+
+    def samples(self) -> int:
+        return len(self.data)
+
+    def valueAt(self, pos: int) -> float:
+        return self.data[pos]
 
     def compute(self, frames: int):
         self.pos += frames
@@ -74,9 +83,11 @@ class Envelope(_ChuckEnvelope):
 
 
 class ADSR(_ChuckEnvelope):
-    def __init__(self):
+    def __init__(self, A: _ChuckDur = None, D: _ChuckDur = None, S: float = None, R: _ChuckDur = None):
         super().__init__()
         self._release_samples = 0
+        if A is not None and D is not None and S is not None and R is not None:
+            self.set(A, D, S, R)
 
     def set(self, A: _ChuckDur, D: _ChuckDur, S: float, R: _ChuckDur):
         A_frames, D_frames, R_frames = int(A._frames), int(D._frames), int(R._frames)
@@ -105,51 +116,47 @@ class Delay(_ChuckInOutModule):
     def __init__(self, delay: _ChuckDur = _ChuckDur(0), gain: float = 1.0):
         super().__init__()
         self.gain = gain
-        self._delay_i = 0
-        self._off_i = 0
+        self._delay_frames = 0
+        self._buffer = None
         self.delay = delay
 
     def __setattr__(self, key, value):
         if key == "delay":
-            self._delay_i = int(value._frames)
-            self._off_i = self._delay_i + self._chuck_buffer_size
-            self._in_buffer = np.zeros(self._off_i, dtype=np.float32)
+            self._delay_frames = int(value._frames)
+            self._buffer = np.zeros(self._delay_frames + self._chuck_buffer_size, dtype=np.float32)
             self.__dict__["delay"] = value
         else:
             super().__setattr__(key, value)
 
     def compute(self, input: np.ndarray) -> np.ndarray:
-        frames = input.shape[0]
-        self._in_buffer[self._i:self._i + frames] = input
-        self._i += frames
-
-        if self._i == self._off_i:
-            res = self._in_buffer[:frames]
-            self._in_buffer[:-frames] = self._in_buffer[frames:]
-            self._i = self._delay_i
-        elif self._i <= self._delay_i:
-            res = np.zeros_like(input)
-        else:
-            res = np.zeros_like(input)
-            valid_frames = self._i - self._delay_i
-            res[-valid_frames:] = self._in_buffer[:valid_frames]
-            self._in_buffer[:-valid_frames] = self._in_buffer[valid_frames:]
-            self._i = self._delay_i
-
+        frames = len(input)
+        self._buffer[self._delay_frames:self._delay_frames + frames] = input
+        res = self._buffer[:frames].copy()
+        self._buffer[:self._delay_frames] = self._buffer[frames:self._delay_frames + frames]
         return res * self.gain
 
 
 class Impulse(_ChuckOutModule):
-    def __init__(self):
+    def __init__(self, gain: float = 1.0):
         super().__init__()
-        self.next = False
+        self.gain = gain
+        self.next = 0
 
     def compute(self, frames: int):
-        res = np.zeros(frames)
-        if self.next:
-            res[0] = 1
-            self.next = False
+        res = np.zeros(frames, dtype=np.float32)
+        res[0] = self.next * self.gain
+        self.next = 0
         return res
+
+
+class Step(_ChuckOutModule):
+    def __init__(self, gain: float = 1.0):
+        super().__init__()
+        self.gain = gain
+        self.next = 0
+
+    def compute(self, frames: int):
+        return np.zeros(frames, dtype=np.float32) + self.next * self.gain
 
 
 class Noise(_ChuckOutModule):

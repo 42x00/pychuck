@@ -1,6 +1,5 @@
 from pychuck import *
 
-adc >> Delay(delay=.75 * second) >> dac
-
 while True:
+    print(f'tick: {now / second} seconds')
     now += 1 * second

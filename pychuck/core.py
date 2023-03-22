@@ -1,7 +1,6 @@
 import asyncio
 import queue
 import sys
-import threading
 import types
 
 import numpy as np

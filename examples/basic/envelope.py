@@ -2,7 +2,8 @@ import random
 
 from pychuck import *
 
-Noise() >> (e := Envelope()) >> dac
+e = Envelope()
+Noise() >> e >> dac
 
 while True:
     e.duration = t = random.uniform(10, 500) * ms
