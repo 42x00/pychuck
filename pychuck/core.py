@@ -11,18 +11,11 @@ from pychuck.module.base import _ADC, _DAC, _Blackhole
 from pychuck.util import _ChuckTime, _code_transform, _ChuckDur
 
 
-def spork(generator):
-    current_shred = pychuck.__CHUCK__._current_shred
-    current_shred._sporks.append(_ChuckShred(generator))
-    pychuck.__CHUCK__._current_shred = current_shred
-
-
 class _ChuckShred:
     def __init__(self, generator: types.GeneratorType = None):
         # content
         self._frames = 0
         self._modules = []
-        self._sporks = []
         self._generator = generator
         # init
         if self._generator is not None and self._next():
@@ -30,19 +23,17 @@ class _ChuckShred:
 
     def _next(self):
         pychuck.__CHUCK__._current_shred = self
-        try:
-            frames = int(next(self._generator)._frames)
-            if frames <= 0:
-                raise ValueError("Duration must be greater than 0")
-            self._frames = frames
-            return True
-        except StopIteration:
+        dur = next(self._generator, None)
+        if dur is None:
             self._remove()
             return False
+        frames = int(dur._frames)
+        if frames < 0:
+            raise ValueError("Duration must be positive")
+        self._frames = frames
+        return True
 
     def _remove(self):
-        for shred in self._sporks:
-            shred._remove()
         for module in self._modules:
             module._remove()
 
@@ -80,7 +71,7 @@ class _Chuck:
         pychuck.day = pychuck.hour * 24
         pychuck.week = pychuck.day * 7
 
-    def _compute_graph(self, frames: int):
+    def _compute_frames(self, frames: int):
         for shred in self._shreds:
             for module in shred._modules:
                 module._computed = False
@@ -111,20 +102,18 @@ class _Chuck:
 
     async def _main(self):
         async for indata, outdata, status in self.stream_generator():
-            if status:
-                print(status)
 
             pychuck.adc.buffer[:] = indata[:, 0]
             pychuck.adc._i = pychuck.dac._i = 0
 
-            frames_left = outdata.shape[0]
+            frames_left = len(outdata)
             while frames_left > 0:
                 # add shreds
                 while not self._queue.empty():
                     _ChuckShred(self._queue.get())
                 # compute
-                frames = self._get_min_shred_frames(frames_left)
-                self._compute_graph(frames)
+                frames = min(frames_left, *[shred._frames for shred in self._shreds])
+                self._compute_frames(frames)
                 # update
                 pychuck.now._frame += frames
                 frames_left -= frames
@@ -148,10 +137,3 @@ class _Chuck:
         # TODO: check code
         exec(_code_transform(code), globals())
         self._queue.put(globals()["__chuck_shred__"]())
-
-    def _get_min_shred_frames(self, frames_left: int) -> int:
-        frames = frames_left
-        for shred in self._shreds:
-            if shred._frames < frames:
-                frames = shred._frames
-        return frames
