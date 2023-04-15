@@ -3,4 +3,5 @@ __pycache__
 checkpoints
 data
 stk
+backup
 tmp.py
