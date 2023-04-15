@@ -26,7 +26,7 @@ now += 1 * samp
 git clone https://github.com/42x00/pychuck
 cd pychuck
 
-conda create -y -n pychuck -c conda-forge librosa
+conda create -n pychuck python -y
 conda activate pychuck
 pip install sounddevice
 
