@@ -30,6 +30,9 @@ class _ChuckDur:
         elif isinstance(other, _ChuckDur):
             return self._samples / other._samples
 
+    def copy(self):
+        return _ChuckDur(self._samples)
+
 
 class _ChuckTime:
     def __init__(self, sample: float):
