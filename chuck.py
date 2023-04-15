@@ -13,6 +13,6 @@ if __name__ == '__main__':
     app = _Chuck(sample_rate=args.srate, buffer_size=args.bufsize, verbose=args.verbose)
 
     for file in args.files:
-        app.add_shred(open(file).read())
+        app._add_shred(open(file).read())
 
-    app.start()
+    app._start()

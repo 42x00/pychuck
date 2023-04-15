@@ -3,82 +3,82 @@ import types
 
 
 class _ChuckDur:
-    def __init__(self, frames: float):
-        self._frames = frames
+    def __init__(self, samples: float):
+        self._samples = samples
 
     def __add__(self, other: '_ChuckDur' or '_ChuckTime'):
         if isinstance(other, _ChuckDur):
-            return _ChuckDur(self._frames + other._frames)
+            return _ChuckDur(self._samples + other._samples)
         elif isinstance(other, _ChuckTime):
-            return _ChuckTime(self._frames + other._frame)
+            return _ChuckTime(self._samples + other._sample)
 
     def __sub__(self, other: '_ChuckDur'):
         if isinstance(other, _ChuckDur):
-            return _ChuckDur(self._frames - other._frames)
+            return _ChuckDur(self._samples - other._samples)
 
     def __mul__(self, other: float):
-        return _ChuckDur(self._frames * other)
+        return _ChuckDur(self._samples * other)
 
     def __rmul__(self, other: float):
-        return _ChuckDur(other * self._frames)
+        return _ChuckDur(other * self._samples)
 
     def __truediv__(self, other: float or '_ChuckDur'):
         if isinstance(other, float):
-            return _ChuckDur(self._frames / other)
+            return _ChuckDur(self._samples / other)
         elif isinstance(other, int):
-            return _ChuckDur(self._frames / other)
+            return _ChuckDur(self._samples / other)
         elif isinstance(other, _ChuckDur):
-            return self._frames / other._frames
+            return self._samples / other._samples
 
 
 class _ChuckTime:
-    def __init__(self, frame: float):
-        self._frame = frame
+    def __init__(self, sample: float):
+        self._sample = sample
 
     def __str__(self):
-        return str(self._frame)
+        return str(self._sample)
 
     def __add__(self, other: '_ChuckDur'):
         if isinstance(other, _ChuckDur):
-            return _ChuckTime(self._frame + other._frames)
+            return _ChuckTime(self._sample + other._samples)
 
     def __sub__(self, other: '_ChuckDur' or '_ChuckTime'):
         if isinstance(other, _ChuckDur):
-            return _ChuckTime(self._frame - other._frames)
+            return _ChuckTime(self._sample - other._samples)
         elif isinstance(other, _ChuckTime):
-            return _ChuckDur(self._frame - other._frame)
+            return _ChuckDur(self._sample - other._sample)
 
     def __truediv__(self, other: '_ChuckDur'):
         if isinstance(other, _ChuckDur):
-            return self._frame / other._frames
+            return self._sample / other._samples
 
     def __mod__(self, other: '_ChuckDur'):
         if isinstance(other, _ChuckDur):
-            return _ChuckDur(self._frame % other._frames)
+            return _ChuckDur(self._sample % other._samples)
 
     def __matmul__(self, other: types.GeneratorType):
         pass
 
     def __lt__(self, other: '_ChuckTime'):
-        return self._frame < other._frame
+        return self._sample < other._sample
 
     def __gt__(self, other: '_ChuckTime'):
-        return self._frame > other._frame
+        return self._sample > other._sample
 
     def __le__(self, other: '_ChuckTime'):
-        return self._frame <= other._frame
+        return self._sample <= other._sample
 
     def __ge__(self, other: '_ChuckTime'):
-        return self._frame >= other._frame
+        return self._sample >= other._sample
 
     def __eq__(self, other: '_ChuckTime'):
-        return self._frame == other._frame
+        return self._sample == other._sample
 
     def __ne__(self, other: '_ChuckTime'):
-        return self._frame != other._frame
+        return self._sample != other._sample
 
     def copy(self):
-        return _ChuckTime(self._frame)
+        return _ChuckTime(self._sample)
 
 
 class Std:
