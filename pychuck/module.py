@@ -1,12 +1,11 @@
 import ctypes
 
 import numpy as np
-import soundfile as sf
 
 import pychuck
 from pychuck.util import _ChuckDur
 
-libstk_wrapper = ctypes.CDLL('./wrapper/libstk_wrapper.so')
+libstk_wrapper = ctypes.CDLL('/Users/ykli/research/pychuck/workspace/wrapper/libstk_wrapper.so')
 
 
 class UGen:
@@ -242,6 +241,19 @@ libstk_wrapper.SineWave_dtor.argtypes = [ctypes.c_void_p]
 
 
 class SinOsc(UGen):
+    """
+    Sine wave oscillator.
+
+    ...
+
+    Attributes
+    ----------
+    freq : float
+        Frequency of the oscillator in Hz.
+    gain : float
+        Gain of the oscillator.
+    """
+
     def __init__(self, freq: float = 220.0, gain: float = 1.0):
         super().__init__()
         self._obj = libstk_wrapper.SineWave_ctor()
@@ -617,6 +629,21 @@ libstk_wrapper.Blit_dtor.argtypes = [ctypes.c_void_p]
 
 
 class Blit(UGen):
+    """
+    Blit is a band-limited impulse train generator.
+
+    ...
+
+    Attributes
+    ----------
+    freq : float
+        Frequency of the impulse train in Hz.
+    harmonics : int
+        Number of harmonics to use in the synthesis of the impulse train.
+    gain : float
+        Overall output gain.
+    """
+
     def __init__(self, freq: float = 220.0, harmonics: int = 100, gain: float = 1.0):
         super().__init__()
         self._obj = libstk_wrapper.Blit_ctor()
