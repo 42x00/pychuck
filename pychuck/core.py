@@ -73,7 +73,7 @@ class _Chuck:
         pychuck.blackhole._compute_samples(samples)
         pychuck.dac._compute_samples(samples)
 
-    def _compute_buffer(self, indata: np.ndarray):
+    def _forward(self, indata: np.ndarray):
         pychuck.adc._buffer[:] = indata[:, 0]
 
         while not self._shred_queue.empty():
@@ -98,7 +98,7 @@ class _Chuck:
     def _start(self):
         try:
             asyncio.run(main(sample_rate=self._sample_rate, buffer_size=self._buffer_size,
-                             callback=self._compute_buffer))
+                             callback=self._forward))
         except KeyboardInterrupt:
             sys.exit('\nInterrupted by user')
 
