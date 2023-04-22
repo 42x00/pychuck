@@ -4,16 +4,16 @@ import types
 import numpy as np
 
 import pychuck
-from pychuck.module import _ADC, _DAC
+from pychuck.module import _ADC, _DAC, _Blackhole
 from pychuck.util import _ChuckDur, _ChuckTime, _wrap_code
 
 
 class _ChuckShred:
-    def __init__(self, generator: types.GeneratorType):
+    def __init__(self, generator: types.GeneratorType = None):
         self._generator = generator
         self._samples_left = 0
         self._modules = []
-        if self._next():
+        if generator is not None and self._next():
             pychuck.__CHUCK__._shreds.append(self)
 
     def _next(self):
@@ -30,7 +30,12 @@ class _ChuckShred:
         self._samples_left -= samples
         if self._samples_left <= 0:
             if not self._next():
-                pychuck.__CHUCK__._shreds.remove(self)
+                self._remove()
+
+    def _remove(self):
+        for module in self._modules:
+            module._remove()
+        pychuck.__CHUCK__._shreds.remove(self)
 
 
 class _Chuck:
@@ -38,13 +43,18 @@ class _Chuck:
         pychuck.__CHUCK__ = self
         self._sample_rate = 44100
         self._buffer_size = 256
+        self._in_channels = 1
+        self._out_channels = 2
         self._shreds = []
+        self._global_shred = _ChuckShred()
+        self._current_shred = self._global_shred
         self._command_queue = queue.Queue()
         self._init_globals()
 
     def _init_globals(self):
         pychuck.adc = _ADC()
         pychuck.dac = _DAC()
+        pychuck.blackhole = _Blackhole()
 
         pychuck.now = _ChuckTime(0)
 
@@ -78,8 +88,25 @@ class _Chuck:
             _ChuckShred(args[1])
 
     def _compute(self, samples: int):
-        pass
+        for shred in self._shreds:
+            for module in shred._modules:
+                module._computed = False
+        for module in self._global_shred._modules:
+            module._computed = False
+        pychuck.blackhole._compute_samples(samples)
+        pychuck.dac._compute_samples(samples)
 
     def _add_shred(self, code: str):
         exec(_wrap_code(code), globals())
         self._command_queue.put(['add_shred', globals()['__chuck_shred__']()])
+
+    def _loop(self):
+        from pychuck.io import main
+        import asyncio
+        import sys
+        try:
+            asyncio.run(main(sample_rate=self._sample_rate, buffer_size=self._buffer_size,
+                             channels=(self._in_channels, self._out_channels),
+                             callback=self._forward))
+        except KeyboardInterrupt:
+            sys.exit('\nInterrupted by user')

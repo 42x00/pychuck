@@ -1,3 +1,5 @@
+from pychuck.module import *
+
 __CHUCK__ = None
 
 adc = None

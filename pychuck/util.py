@@ -16,6 +16,9 @@ class _ChuckDur:
     def __mul__(self, other: float) -> '_ChuckDur':
         return _ChuckDur(self._samples * other)
 
+    def __rmul__(self, other: float) -> '_ChuckDur':
+        return _ChuckDur(self._samples * other)
+
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
     # now += 1 * second -> yield 1 * second
