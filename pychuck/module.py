@@ -767,14 +767,26 @@ class Object(UGen):
         super().__init__(*args, **kwargs)
 
 
-class OnePole(UGen):
-    def __init__(self, *args, **kwargs):
+class OnePole(_STK):
+    def __init__(self, pole: float = 0.5, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.pole = pole
+
+    def __setattr__(self, key, value):
+        if key == "pole":
+            void = self._libstk_wrapper.OnePole_setPole(self._stk_object, float(value))
+        super().__setattr__(key, value)
 
 
-class OneZero(UGen):
-    def __init__(self, *args, **kwargs):
+class OneZero(_STK):
+    def __init__(self, zero: float = 0.5, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.zero = zero
+
+    def __setattr__(self, key, value):
+        if key == "zero":
+            void = self._libstk_wrapper.OneZero_setZero(self._stk_object, float(value))
+        super().__setattr__(key, value)
 
 
 class Osc(UGen):
@@ -1037,14 +1049,37 @@ class TubeBell(UGen):
         super().__init__(*args, **kwargs)
 
 
-class TwoPole(UGen):
-    def __init__(self, *args, **kwargs):
+class TwoPole(_STK):
+    def __init__(self, radius: float = 0.9, freq: float = 220.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.radius = radius
+        self.freq = freq
+
+    def __setattr__(self, key, value):
+        if key == 'radius':
+            if hasattr(self, 'freq'):
+                void = self._libstk_wrapper.TwoPole_setResonance(self._stk_object, float(self.freq), float(value))
+        elif key == 'freq':
+            if hasattr(self, 'radius'):
+                void = self._libstk_wrapper.TwoPole_setResonance(self._stk_object, float(value), float(self.radius))
+        super().__setattr__(key, value)
 
 
-class TwoZero(UGen):
-    def __init__(self, *args, **kwargs):
+class TwoZero(_STK):
+    def __init__(self, b0: float = 0.0, b1: float = 0.0, b2: float = 0.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.b0 = b0
+        self.b1 = b1
+        self.b2 = b2
+
+    def __setattr__(self, key, value):
+        if key == 'b0':
+            void = self._libstk_wrapper.TwoZero_setB0(self._stk_object, float(value))
+        elif key == 'b1':
+            void = self._libstk_wrapper.TwoZero_setB1(self._stk_object, float(value))
+        elif key == 'b2':
+            void = self._libstk_wrapper.TwoZero_setB2(self._stk_object, float(value))
+        super().__setattr__(key, value)
 
 
 class Type(UGen):
