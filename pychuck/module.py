@@ -17,6 +17,12 @@ class UGen:
         self._in_modules = []
         self._out_modules = []
 
+    def __setattr__(self, key, value):
+        if key == 'gain':
+            for chan in self.chan:
+                chan.__dict__[key] = value
+        super().__setattr__(key, value)
+
     def __ge__(self, other: 'UGen'):
         if len(self.chan) == len(other.chan):
             for i in range(len(self.chan)):
@@ -93,6 +99,7 @@ class _ADCChannel(UGen):
     def _compute_samples(self, samples: int) -> np.ndarray:
         if not self._computed:
             self._computed = True
+            self._buffer[self._i:self._i + samples] *= self.gain
             self._i = (self._i + samples) % self._buffer_size
         return self._buffer[self._i - samples:self._i or None]
 
@@ -124,7 +131,7 @@ class _DACChannel(UGen):
         if not self._computed:
             self._computed = True
             self._aggreate_inputs(samples)
-            self._buffer[self._i:self._i + samples] = self._in_buffer[:samples]
+            self._buffer[self._i:self._i + samples] = self._in_buffer[:samples] * self.gain
             self._i = (self._i + samples) % self._buffer_size
         return self._buffer[self._i - samples:self._i or None]
 
@@ -819,9 +826,24 @@ class Shred(UGen):
         super().__init__(*args, **kwargs)
 
 
-class SinOsc(UGen):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class SinOsc(_STK):
+    def __init__(self, freq: float = 220.0, *args, **kwargs):
+        UGen.__init__(self, *args, **kwargs)
+        self._libstk_wrapper = pychuck.__CHUCK__._libstk_wrapper
+        self._stk_object = self._libstk_wrapper.SineWave_ctor()
+        self.freq = freq
+
+    def __setattr__(self, key, value):
+        if key == 'freq':
+            void = self._libstk_wrapper.SineWave_setFrequency(self._stk_object, float(value))
+        super().__setattr__(key, value)
+
+    def _tick(self, input: float) -> float:
+        float_type = self._libstk_wrapper.SineWave_tick(self._stk_object)
+        return float_type
+
+    def __del__(self):
+        void = self._libstk_wrapper.SineWave_dtor(self._stk_object)
 
 
 class Sitar(UGen):

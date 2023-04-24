@@ -7,22 +7,82 @@ from pychuck.module import _STK
 
 
 class _ChuckTime:
-    def __init__(self, sample: int):
+    def __init__(self, sample: float):
         self._sample = sample
+
+    def __add__(self, other: '_ChuckDur') -> '_ChuckTime':
+        return _ChuckTime(self._sample + other._samples)
+
+    def __sub__(self, other: '_ChuckDur' or '_ChuckTime') -> '_ChuckDur' or '_ChuckTime':
+        if isinstance(other, _ChuckDur):
+            return _ChuckTime(self._sample - other._samples)
+        else:
+            return _ChuckDur(self._sample - other._sample)
+
+    def __lt__(self, other: '_ChuckTime') -> bool:
+        return self._sample < other._sample
+
+    def __le__(self, other: '_ChuckTime') -> bool:
+        return self._sample <= other._sample
+
+    def __eq__(self, other: '_ChuckTime') -> bool:
+        return self._sample == other._sample
+
+    def __ne__(self, other: '_ChuckTime') -> bool:
+        return self._sample != other._sample
+
+    def __gt__(self, other: '_ChuckTime') -> bool:
+        return self._sample > other._sample
+
+    def __ge__(self, other: '_ChuckTime') -> bool:
+        return self._sample >= other._sample
+
+    def __str__(self) -> str:
+        return str(self._sample)
 
 
 class _ChuckDur:
     def __init__(self, samples: float):
         self._samples = samples
 
-    def __truediv__(self, other: float) -> '_ChuckDur':
-        return _ChuckDur(self._samples / other)
+    def __add__(self, other: '_ChuckDur' or '_ChuckTime') -> '_ChuckDur' or '_ChuckTime':
+        if isinstance(other, _ChuckDur):
+            return _ChuckDur(self._samples + other._samples)
+        else:
+            return _ChuckTime(self._samples + other._sample)
+
+    def __sub__(self, other: '_ChuckDur') -> '_ChuckDur':
+        return _ChuckDur(self._samples - other._samples)
 
     def __mul__(self, other: float) -> '_ChuckDur':
         return _ChuckDur(self._samples * other)
 
     def __rmul__(self, other: float) -> '_ChuckDur':
         return _ChuckDur(self._samples * other)
+
+    def __truediv__(self, other: float or '_ChuckDur') -> float:
+        if isinstance(other, _ChuckDur):
+            return self._samples / other._samples
+        else:
+            return _ChuckDur(self._samples / other)
+
+    def __lt__(self, other: '_ChuckDur') -> bool:
+        return self._samples < other._samples
+
+    def __le__(self, other: '_ChuckDur') -> bool:
+        return self._samples <= other._samples
+
+    def __eq__(self, other: '_ChuckDur') -> bool:
+        return self._samples == other._samples
+
+    def __ne__(self, other: '_ChuckDur') -> bool:
+        return self._samples != other._samples
+
+    def __gt__(self, other: '_ChuckDur') -> bool:
+        return self._samples > other._samples
+
+    def __ge__(self, other: '_ChuckDur') -> bool:
+        return self._samples >= other._samples
 
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
@@ -52,22 +112,26 @@ def _wrap_code(code: str) -> str:
     return ast.unparse(wrapper_tree)
 
 
-def _load_stk(recompile=True, root='/Users/ykli/research/pychuck/workspace/wrapper'):
+def _load_stk(compile=True, root='/Users/ykli/research/pychuck/workspace/wrapper'):
+    ck2stk = {'SinOsc': 'SineWave'}
     so_path = os.path.join(root, 'libstk_wrapper.so')
     doc = {}
     for cls in _STK.__subclasses__():
+        cls_name = ck2stk[cls.__name__] if cls.__name__ in ck2stk else cls.__name__
         cls_doc = {'ctor': ('p', []), 'dtor': ('v', ['p']), 'tick': ('f', ['p', 'f'])}
         for node in ast.walk(ast.parse(inspect.getsource(cls))):
             if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) \
                     and isinstance(node.value.func, ast.Attribute) \
-                    and node.value.func.attr.startswith(f'{cls.__name__}_'):
+                    and node.value.func.attr.startswith(f'{cls_name}_'):
+                fname = node.value.func.attr.split('_')[-1]
+                if fname == 'ctor':
+                    continue
                 restype = node.targets[0].id
                 argtypes = [n.func.id for n in node.value.args if isinstance(n, ast.Call)]
-                fname = node.value.func.attr.split('_')[-1]
                 cls_doc[fname] = (restype[0], ['p'] + [t[0] for t in argtypes])
-        doc[cls.__name__] = cls_doc
+        doc[cls_name] = cls_doc
 
-    if recompile:
+    if compile:
         cpp_type_map = {'v': 'void', 'f': 'double', 'i': 'int', 'p': '', }
         cpp_code = ""
         for k, v in doc.items():
@@ -85,7 +149,11 @@ def _load_stk(recompile=True, root='/Users/ykli/research/pychuck/workspace/wrapp
                 elif fname == 'dtor':
                     cpp_code += f'\t\tdelete arg0;\n'
                 else:
-                    cpp_code += f'\t\treturn arg0->{fname}({", ".join([f"arg{i + 1}" for i in range(len(argtypes) - 1)])});\n'
+                    if restype == 'v':
+                        cpp_code += '\t\t'
+                    else:
+                        cpp_code += '\t\treturn '
+                    cpp_code += f'arg0->{fname}({", ".join([f"arg{i + 1}" for i in range(len(argtypes) - 1)])});\n'
                 cpp_code += '\t}\n'
         cpp_code += '}'
         cpp_path = os.path.join(root, 'libstk_wrapper.cpp')
@@ -100,6 +168,6 @@ def _load_stk(recompile=True, root='/Users/ykli/research/pychuck/workspace/wrapp
         for fname, (restype, argtypes) in v.items():
             if restype != 'v':
                 getattr(libstk_wrapper, f'{k}_{fname}').restype = py_type_map[restype]
-            if len(argtypes) > 1:
+            if len(argtypes) > 0:
                 getattr(libstk_wrapper, f'{k}_{fname}').argtypes = [py_type_map[t] for t in argtypes]
     return libstk_wrapper

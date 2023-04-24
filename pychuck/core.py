@@ -39,7 +39,7 @@ class _ChuckShred:
 
 
 class _Chuck:
-    def __init__(self):
+    def __init__(self, compile: bool = False):
         pychuck.__CHUCK__ = self
         self._sample_rate = 44100
         self._buffer_size = 256
@@ -50,7 +50,7 @@ class _Chuck:
         self._current_shred = self._global_shred
         self._command_queue = queue.Queue()
         self._init_globals()
-        self._libstk_wrapper = _load_stk()
+        self._libstk_wrapper = _load_stk(compile=compile)
 
     def _init_globals(self):
         pychuck.adc = _ADC()
