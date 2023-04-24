@@ -1,14 +1,16 @@
 import numpy as np
 
 import pychuck
+from pychuck.util import _ChuckDur
 
 
 class UGen:
-    def __init__(self, gain: float = 1, *args, **kwargs):
+    def __init__(self, gain: float = 1, op: int = 0, *args, **kwargs):
         pychuck.__CHUCK__._current_shred._modules.append(self)
         self.chan = [self]
         self.gain = gain
         self.last = 0
+        self.op = op
         self._sample_rate = pychuck.__CHUCK__._sample_rate
         self._buffer_size = pychuck.__CHUCK__._buffer_size
         self._in_buffer = np.zeros(self._buffer_size, dtype=np.float32)
@@ -43,14 +45,23 @@ class UGen:
 
     def _remove(self):
         for module in self._out_modules:
-            module._in_modules.remove(self)
+            if self in module._in_modules:
+                module._in_modules.remove(self)
+        self._out_modules.clear()
         for module in self._in_modules:
-            module._out_modules.remove(self)
+            if self in module._out_modules:
+                module._out_modules.remove(self)
+        self._in_modules.clear()
 
     def _aggreate_inputs(self, samples: int):
-        self._in_buffer[:samples] = 0
-        for module in self._in_modules:
-            self._in_buffer[:samples] += module._compute_samples(samples)
+        if self.op == 0:
+            self._in_buffer[:samples] = 0
+            for module in self._in_modules:
+                self._in_buffer[:samples] += module._compute_samples(samples)
+        elif self.op == 3:
+            self._in_buffer[:samples] = 1
+            for module in self._in_modules:
+                self._in_buffer[:samples] *= module._compute_samples(samples)
 
     def _compute_samples(self, samples: int) -> np.ndarray:
         if not self._computed:
@@ -108,14 +119,8 @@ class _ADC(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.chan = [_ADCChannel() for _ in range(pychuck.__CHUCK__._in_channels)]
-
-    def __getattr__(self, item):
-        if item == 'left':
-            return self.chan[0]
-        elif item == 'right':
-            return self.chan[1]
-        else:
-            raise AttributeError
+        self.left = self.chan[0]
+        self.right = self.chan[-1]
 
     def _set(self, indata: np.ndarray):
         for i in range(len(self.chan)):
@@ -140,14 +145,8 @@ class _DAC(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.chan = [_DACChannel() for _ in range(pychuck.__CHUCK__._out_channels)]
-
-    def __getattr__(self, item):
-        if item == 'left':
-            return self.chan[0]
-        elif item == 'right':
-            return self.chan[1]
-        else:
-            raise AttributeError
+        self.left = self.chan[0]
+        self.right = self.chan[-1]
 
     def _compute_samples(self, samples: int) -> np.ndarray:
         for chan in self.chan:
@@ -162,9 +161,31 @@ class ADC(UGen):
         super().__init__(*args, **kwargs)
 
 
-class ADSR(UGen):
-    def __init__(self, *args, **kwargs):
+class ADSR(_STK):
+    def __init__(self, A: _ChuckDur = None, D: _ChuckDur = None, S: float = 1., R: _ChuckDur = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if all([A, D, S, R]):
+            self.set(A, D, S, R)
+        self.releaseTime = R.copy()
+
+    def set(self, A: _ChuckDur, D: _ChuckDur, S: float, R: _ChuckDur):
+        s = pychuck.second
+        void = self._libstk_wrapper.ADSR_setAllTimes(
+            self._stk_object, float(A / s), float(D / s), float(S), float(R / s))
+
+    def _compute(self, samples: int):
+        for i in range(samples):
+            self._buffer[i] = self._tick() * self._in_buffer[i]
+
+    def _tick(self) -> float:
+        float_type = self._libstk_wrapper.ADSR_tick(self._stk_object)
+        return float_type
+
+    def keyOn(self):
+        void = self._libstk_wrapper.ADSR_keyOn(self._stk_object)
+
+    def keyOff(self):
+        void = self._libstk_wrapper.ADSR_keyOff(self._stk_object)
 
 
 class AI(UGen):
@@ -187,14 +208,48 @@ class BeeThree(UGen):
         super().__init__(*args, **kwargs)
 
 
-class BiQuad(UGen):
-    def __init__(self, *args, **kwargs):
+class BiQuad(_STK):
+    def __init__(self, prad: float = None, pfreq: float = None, eqzs: bool = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.prad = prad
+        self.pfreq = pfreq
+        self.eqzs = eqzs
+
+    def __setattr__(self, key, value):
+        if key == 'prad':
+            if value is not None and hasattr(self, 'pfreq'):
+                void = self._libstk_wrapper.BiQuad_setResonance(self._stk_object, float(self.pfreq), float(value))
+        elif key == 'pfreq':
+            if value is not None and hasattr(self, 'prad'):
+                void = self._libstk_wrapper.BiQuad_setResonance(self._stk_object, float(value), float(self.prad))
+        elif key == 'eqzs':
+            if value is True:
+                void = self._libstk_wrapper.BiQuad_setEqualGainZeroes(self._stk_object)
+        super().__setattr__(key, value)
 
 
-class Blit(UGen):
-    def __init__(self, *args, **kwargs):
+class Blit(_STK):
+    def __init__(self, harmonics: int = None, freq: float = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.harmonics = harmonics
+        self.freq = freq
+
+    def __setattr__(self, key, value):
+        if key == 'harmonics':
+            if value is not None:
+                void = self._libstk_wrapper.Blit_setHarmonics(self._stk_object, int(value))
+        elif key == 'freq':
+            if value is not None:
+                void = self._libstk_wrapper.Blit_setFrequency(self._stk_object, float(value))
+        super().__setattr__(key, value)
+
+    def _compute(self, samples: int):
+        for i in range(samples):
+            self._buffer[i] = self._tick()
+
+    def _tick(self) -> float:
+        float_type = self._libstk_wrapper.Blit_tick(self._stk_object)
+        return float_type
 
 
 class BlitSaw(UGen):
@@ -302,9 +357,16 @@ class DCT(UGen):
         super().__init__(*args, **kwargs)
 
 
-class Delay(UGen):
-    def __init__(self, *args, **kwargs):
+class Delay(_STK):
+    def __init__(self, delay: _ChuckDur = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.delay = delay
+
+    def __setattr__(self, key, value):
+        if key == 'delay':
+            if value is not None:
+                void = self._libstk_wrapper.Delay_setDelay(self._stk_object, int(value))
+        super().__setattr__(key, value)
 
 
 class DelayA(UGen):
@@ -312,9 +374,20 @@ class DelayA(UGen):
         super().__init__(*args, **kwargs)
 
 
-class DelayL(UGen):
-    def __init__(self, *args, **kwargs):
+class DelayL(_STK):
+    def __init__(self, max: _ChuckDur = None, delay: _ChuckDur = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.max = max
+        self.delay = delay
+
+    def __setattr__(self, key, value):
+        if key == 'max':
+            if value is not None:
+                void = self._libstk_wrapper.DelayL_setMaximumDelay(self._stk_object, int(value))
+        elif key == 'delay':
+            if value is not None:
+                void = self._libstk_wrapper.DelayL_setDelay(self._stk_object, float(value._s()))
+        super().__setattr__(key, value)
 
 
 class DelayP(UGen):
@@ -332,9 +405,30 @@ class Echo(UGen):
         super().__init__(*args, **kwargs)
 
 
-class Envelope(UGen):
-    def __init__(self, *args, **kwargs):
+class Envelope(_STK):
+    def __init__(self, duration: _ChuckDur = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.duration = duration
+
+    def __setattr__(self, key, value):
+        if key == 'duration':
+            if value is not None:
+                void = self._libstk_wrapper.Envelope_setRate(self._stk_object, float(1 / int(value)))
+        super().__setattr__(key, value)
+
+    def _compute(self, samples: int):
+        for i in range(samples):
+            self._buffer[i] = self._tick() * self._in_buffer[i]
+
+    def _tick(self) -> float:
+        float_type = self._libstk_wrapper.Envelope_tick(self._stk_object)
+        return float_type
+
+    def keyOn(self):
+        void = self._libstk_wrapper.Envelope_keyOn(self._stk_object)
+
+    def keyOff(self):
+        void = self._libstk_wrapper.Envelope_keyOff(self._stk_object)
 
 
 class Event(UGen):
@@ -403,9 +497,6 @@ class FullRect(UGen):
 
 
 class Gain(UGen):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def _compute(self, samples: int):
         self._buffer[:samples] = self._in_buffer[:samples]
 
@@ -507,7 +598,7 @@ class JCRev(_STK):
 
     def __setattr__(self, key, value):
         if key == "mix":
-            void = self._libstk_wrapper.JCRev_setT60(self._stk_object, float(value))
+            void = self._libstk_wrapper.JCRev_setEffectMix(self._stk_object, float(value))
         super().__setattr__(key, value)
 
 
@@ -662,8 +753,8 @@ class Moog(UGen):
 
 
 class Noise(UGen):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def _compute(self, samples: int):
+        self._buffer[:samples] = np.random.uniform(-1, 1, samples)
 
 
 class NRev(UGen):
@@ -726,9 +817,25 @@ class OscSend(UGen):
         super().__init__(*args, **kwargs)
 
 
+class Pan2Channel(UGen):
+    def _compute(self, samples: int):
+        self._buffer[:samples] = self._in_buffer[:samples]
+
+
 class Pan2(UGen):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, pan: float = 0, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.chan = [Pan2Channel() for _ in range(2)]
+        self.left = self.chan[0]
+        self.right = self.chan[1]
+        self.pan = pan
+
+    def __setattr__(self, key, value):
+        if key == 'pan':
+            # value: (-1, 1)
+            self.chan[0].gain = 1 - value
+            self.chan[1].gain = 1 + value
+        super().__setattr__(key, value)
 
 
 class PCA(UGen):
@@ -866,11 +973,6 @@ class SqrOsc(UGen):
         super().__init__(*args, **kwargs)
 
 
-class Std(UGen):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
 class StdErr(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -884,6 +986,10 @@ class StdOut(UGen):
 class Step(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.next = 0
+
+    def _compute(self, samples: int):
+        self._buffer[:samples] = self.next
 
 
 class StifKarp(UGen):

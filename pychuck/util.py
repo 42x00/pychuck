@@ -3,7 +3,17 @@ import ctypes
 import inspect
 import os
 
-from pychuck.module import _STK
+import pychuck
+
+
+class Std:
+    @staticmethod
+    def mtof(midi_note: int):
+        if midi_note <= -1500:
+            return 0
+        if midi_note > 1499:
+            midi_note = 1499
+        return 2 ** ((midi_note - 69) / 12) * 440
 
 
 class _ChuckTime:
@@ -18,6 +28,12 @@ class _ChuckTime:
             return _ChuckTime(self._sample - other._samples)
         else:
             return _ChuckDur(self._sample - other._sample)
+
+    def __truediv__(self, other: '_ChuckDur') -> float:
+        return self._sample / other._samples
+
+    def __mod__(self, other: '_ChuckDur') -> '_ChuckDur':
+        return _ChuckDur(self._sample % other._samples)
 
     def __lt__(self, other: '_ChuckTime') -> bool:
         return self._sample < other._sample
@@ -39,6 +55,9 @@ class _ChuckTime:
 
     def __str__(self) -> str:
         return str(self._sample)
+
+    def copy(self):
+        return _ChuckTime(self._sample)
 
 
 class _ChuckDur:
@@ -84,6 +103,15 @@ class _ChuckDur:
     def __ge__(self, other: '_ChuckDur') -> bool:
         return self._samples >= other._samples
 
+    def __int__(self):
+        return int(self._samples)
+
+    def _s(self):
+        return self._samples / pychuck.__CHUCK__._sample_rate
+
+    def copy(self):
+        return _ChuckDur(self._samples)
+
 
 class _ChuckCodeTransformer(ast.NodeTransformer):
     # now += 1 * second -> yield 1 * second
@@ -116,7 +144,7 @@ def _load_stk(compile=True, root='/Users/ykli/research/pychuck/workspace/wrapper
     ck2stk = {'SinOsc': 'SineWave'}
     so_path = os.path.join(root, 'libstk_wrapper.so')
     doc = {}
-    for cls in _STK.__subclasses__():
+    for cls in pychuck.module._STK.__subclasses__():
         cls_name = ck2stk[cls.__name__] if cls.__name__ in ck2stk else cls.__name__
         cls_doc = {'ctor': ('p', []), 'dtor': ('v', ['p']), 'tick': ('f', ['p', 'f'])}
         for node in ast.walk(ast.parse(inspect.getsource(cls))):
@@ -163,7 +191,7 @@ def _load_stk(compile=True, root='/Users/ykli/research/pychuck/workspace/wrapper
         os.system(f'g++ -shared -o {so_path} {cpp_path} -I{include_path} -lstk -fPIC')
 
     libstk_wrapper = ctypes.CDLL(so_path)
-    py_type_map = {'f': ctypes.c_double, 'i': ctypes.c_int, 'p': ctypes.c_void_p, }
+    py_type_map = {'f': ctypes.c_double, 'i': ctypes.c_ulong, 'p': ctypes.c_void_p, }
     for k, v in doc.items():
         for fname, (restype, argtypes) in v.items():
             if restype != 'v':
