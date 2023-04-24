@@ -5,7 +5,7 @@ import numpy as np
 
 import pychuck
 from pychuck.module import _ADC, _DAC, _Blackhole
-from pychuck.util import _ChuckDur, _ChuckTime, _wrap_code
+from pychuck.util import _ChuckDur, _ChuckTime, _wrap_code, _load_stk
 
 
 class _ChuckShred:
@@ -50,6 +50,7 @@ class _Chuck:
         self._current_shred = self._global_shred
         self._command_queue = queue.Queue()
         self._init_globals()
+        self._libstk_wrapper = _load_stk()
 
     def _init_globals(self):
         pychuck.adc = _ADC()
