@@ -2,7 +2,7 @@
 
 ### Introduction
 
-PyChucK is a Python Implementation for [ChucK](http://chuck.cs.princeton.edu/)
+PyChucK is a Python Implementation for [ChucK](https://chuck.stanford.edu/)
 
 ### Usage
 
@@ -10,7 +10,8 @@ PyChucK is a Python Implementation for [ChucK](http://chuck.cs.princeton.edu/)
 from pychuck import *
 
 # patch
-(s := SinOsc()) >= dac
+s = SinOsc(gain=.5)
+s >= dac
 
 # update
 while True:
@@ -21,13 +22,8 @@ while True:
 ### Quickstart
 
 ```bash
-git clone https://github.com/42x00/pychuck
-cd pychuck
-
-conda create -n pychuck python -y
-conda activate pychuck
+git clone https://github.com/42x00/pychuck && cd pychuck
 pip install sounddevice
-
 python chuck.py examples/sinosc.py
 ```
 
