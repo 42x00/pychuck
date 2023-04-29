@@ -52,12 +52,13 @@ class _ChuckShred:
 
 
 class _Chuck:
-    def __init__(self, compile: bool = False):
+    def __init__(self, sample_rate: int = 44100, buffer_size: int = 256, in_channels: int = 1, out_channels: int = 2,
+                 compile: bool = False):
         pychuck.__CHUCK__ = self
-        self._sample_rate = 44100
-        self._buffer_size = 256
-        self._in_channels = 1
-        self._out_channels = 2
+        self._sample_rate = sample_rate
+        self._buffer_size = buffer_size
+        self._in_channels = in_channels
+        self._out_channels = out_channels
         self._shreds = []
         self._global_shred = _ChuckShred()
         self._current_shred = self._global_shred
@@ -100,6 +101,9 @@ class _Chuck:
     def _run(self, args):
         if args[0] == 'add_shred':
             _ChuckShred(args[1])
+        elif args[0] == 'remove_last_shred':
+            if len(self._shreds) > 0:
+                self._shreds[-1]._remove()
 
     def _compute(self, samples: int):
         for shred in self._shreds:
@@ -113,6 +117,9 @@ class _Chuck:
     def _add_shred(self, code: str):
         exec(_wrap_code(code), globals())
         self._command_queue.put(['add_shred', globals()['__chuck_shred__']()])
+
+    def _remove_last_shred(self):
+        self._command_queue.put(['remove_last_shred'])
 
     def _loop(self):
         from pychuck.io import main

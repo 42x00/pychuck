@@ -19,3 +19,5 @@ minute: _ChuckDur = None
 hour: _ChuckDur = None
 day: _ChuckDur = None
 week: _ChuckDur = None
+
+canvas = None
