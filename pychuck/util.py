@@ -6,6 +6,12 @@ import os
 import pychuck
 
 
+def spork(generator, VM=None):
+    current_shred = VM._current_shred
+    current_shred._sporks.append(pychuck.core._ChuckShred(VM=VM, generator=generator))
+    VM._current_shred = current_shred
+
+
 class Std:
     @staticmethod
     def mtof(midi_note: int):
@@ -106,9 +112,6 @@ class _ChuckDur:
     def __int__(self):
         return int(self._samples)
 
-    def _s(self):
-        return self._samples / pychuck.__CHUCK__._sample_rate
-
     def copy(self):
         return _ChuckDur(self._samples)
 
@@ -126,6 +129,12 @@ class _ChuckCodeTransformer(ast.NodeTransformer):
             return ast.Expr(value=ast.YieldFrom(value=node.right))
         return node
 
+    # SinOsc() -> SinOsc(VM=VM)
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name) and (hasattr(pychuck.module, node.func.id) or node.func.id == 'spork'):
+            node.keywords.append(ast.keyword(arg='VM', value=ast.Name(id='VM', ctx=ast.Load())))
+        return node
+
     # delete: from pychuck import *
     def visit_ImportFrom(self, node):
         if node.module != 'pychuck' or node.names[0].name != '*':
@@ -133,7 +142,11 @@ class _ChuckCodeTransformer(ast.NodeTransformer):
 
 
 def _wrap_code(code: str) -> str:
-    wrapper_tree = ast.parse(f'from pychuck import *\ndef __chuck_shred__(): pass')
+    wrapper_tree = ast.parse(f'''
+from pychuck import *
+def __chuck_shred__(VM, adc, dac, blackhole, now, samp, ms, second, minute, hour, day, week):
+    pass
+''')
     code_tree = ast.parse(code)
     ast.fix_missing_locations(_ChuckCodeTransformer().visit(code_tree))
     wrapper_tree.body[1].body = code_tree.body

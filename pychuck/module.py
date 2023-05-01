@@ -1,18 +1,17 @@
 import numpy as np
 
-import pychuck
-from pychuck.util import _ChuckDur
+from .util import _ChuckDur
 
 
 class UGen:
-    def __init__(self, gain: float = 1, op: int = 0, *args, **kwargs):
-        pychuck.__CHUCK__._current_shred._modules.append(self)
+    def __init__(self, gain: float = 1, op: int = 0, VM=None, *args, **kwargs):
+        VM._current_shred._modules.append(self)
         self.chan = [self]
         self.gain = gain
         self.last = 0
         self.op = op
-        self._sample_rate = pychuck.__CHUCK__._sample_rate
-        self._buffer_size = pychuck.__CHUCK__._buffer_size
+        self._sample_rate = VM._sample_rate
+        self._buffer_size = VM._buffer_size
         self._in_buffer = np.zeros(self._buffer_size, dtype=np.float32)
         self._buffer = np.zeros(self._buffer_size, dtype=np.float32)
         self._computed = False
@@ -83,7 +82,7 @@ class UGen:
 class _STK(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._libstk_wrapper = pychuck.__CHUCK__._libstk_wrapper
+        self._libstk_wrapper = kwargs['VM']._libstk_wrapper
         self._stk_object = getattr(self._libstk_wrapper, f'{self.__class__.__name__}_ctor')()
 
     def _tick(self, input: float) -> float:
@@ -118,7 +117,7 @@ class _ADCChannel(UGen):
 class _ADC(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.chan = [_ADCChannel() for _ in range(pychuck.__CHUCK__._in_channels)]
+        self.chan = [_ADCChannel(*args, **kwargs) for _ in range(kwargs['VM']._in_channels)]
         self.left = self.chan[0]
         self.right = self.chan[-1]
 
@@ -144,7 +143,7 @@ class _DACChannel(UGen):
 class _DAC(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.chan = [_DACChannel() for _ in range(pychuck.__CHUCK__._out_channels)]
+        self.chan = [_DACChannel(*args, **kwargs) for _ in range(kwargs['VM']._out_channels)]
         self.left = self.chan[0]
         self.right = self.chan[-1]
 
@@ -169,7 +168,7 @@ class ADSR(_STK):
         self.releaseTime = R.copy()
 
     def set(self, A: _ChuckDur, D: _ChuckDur, S: float, R: _ChuckDur):
-        s = pychuck.second
+        s = _ChuckDur(self._sample_rate)
         void = self._libstk_wrapper.ADSR_setAllTimes(
             self._stk_object, float(A / s), float(D / s), float(S), float(R / s))
 
@@ -386,7 +385,7 @@ class DelayL(_STK):
                 void = self._libstk_wrapper.DelayL_setMaximumDelay(self._stk_object, int(value))
         elif key == 'delay':
             if value is not None:
-                void = self._libstk_wrapper.DelayL_setDelay(self._stk_object, float(value._s()))
+                void = self._libstk_wrapper.DelayL_setDelay(self._stk_object, float(value._samples / self._sample_rate))
         super().__setattr__(key, value)
 
 
@@ -837,7 +836,7 @@ class Pan2Channel(UGen):
 class Pan2(UGen):
     def __init__(self, pan: float = 0, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.chan = [Pan2Channel() for _ in range(2)]
+        self.chan = [Pan2Channel(*args, **kwargs) for _ in range(2)]
         self.left = self.chan[0]
         self.right = self.chan[1]
         self.pan = pan
@@ -948,7 +947,7 @@ class Shred(UGen):
 class SinOsc(_STK):
     def __init__(self, freq: float = 220.0, *args, **kwargs):
         UGen.__init__(self, *args, **kwargs)
-        self._libstk_wrapper = pychuck.__CHUCK__._libstk_wrapper
+        self._libstk_wrapper = kwargs['VM']._libstk_wrapper
         self._stk_object = self._libstk_wrapper.SineWave_ctor()
         self.freq = freq
 

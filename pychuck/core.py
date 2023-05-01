@@ -3,29 +3,22 @@ import types
 
 import numpy as np
 
-import pychuck
-from pychuck.module import _ADC, _DAC, _Blackhole
-from pychuck.util import _ChuckDur, _ChuckTime, _wrap_code, _load_stk
-
-
-def spork(generator: types.GeneratorType):
-    current_shred = pychuck.__CHUCK__._current_shred
-    current_shred._sporks.append(_ChuckShred(generator))
-    pychuck.__CHUCK__._current_shred = current_shred
+from .module import _ADC, _DAC, _Blackhole
+from .util import _ChuckDur, _ChuckTime, _wrap_code, _load_stk
 
 
 class _ChuckShred:
-    def __init__(self, generator: types.GeneratorType = None):
+    def __init__(self, VM: '_Chuck', generator: types.GeneratorType = None):
         self._generator = generator
         self._samples_left = 0
         self._modules = []
         self._sporks = []
-        if generator is not None and self._next():
-            pychuck.__CHUCK__._shreds.append(self)
+        if generator is not None and self._next(VM=VM):
+            VM._shreds.append(self)
 
-    def _next(self):
+    def _next(self, VM: '_Chuck') -> bool:
         try:
-            pychuck.__CHUCK__._current_shred = self
+            VM._current_shred = self
             dur = next(self._generator)
             if dur._samples < 0:
                 raise ValueError('Duration must be positive')
@@ -34,55 +27,50 @@ class _ChuckShred:
         except StopIteration:
             return False
 
-    def _update(self, samples: int):
+    def _update(self, samples: int, VM: '_Chuck'):
         self._samples_left -= samples
         if self._samples_left <= 0:
-            if not self._next():
-                self._remove()
+            if not self._next(VM=VM):
+                self._remove(VM=VM)
 
-    def _remove(self):
+    def _remove(self, VM: '_Chuck'):
         for shred in self._sporks:
-            shred._remove()
+            shred._remove(VM=VM)
         self._sporks.clear()
         for module in self._modules:
             module._remove()
         self._modules.clear()
-        if self in pychuck.__CHUCK__._shreds:
-            pychuck.__CHUCK__._shreds.remove(self)
+        if self in VM._shreds:
+            VM._shreds.remove(self)
 
 
 class _Chuck:
     def __init__(self, sample_rate: int = 44100, buffer_size: int = 256, in_channels: int = 1, out_channels: int = 2,
                  compile: bool = False):
-        pychuck.__CHUCK__ = self
         self._sample_rate = sample_rate
         self._buffer_size = buffer_size
         self._in_channels = in_channels
         self._out_channels = out_channels
         self._shreds = []
-        self._global_shred = _ChuckShred()
+        self._global_shred = _ChuckShred(VM=self)
         self._current_shred = self._global_shred
         self._command_queue = queue.Queue()
-        self._init_globals()
         self._libstk_wrapper = _load_stk(compile=compile)
 
-    def _init_globals(self):
-        pychuck.adc = _ADC()
-        pychuck.dac = _DAC()
-        pychuck.blackhole = _Blackhole()
-
-        pychuck.now = _ChuckTime(0)
-
-        pychuck.samp = _ChuckDur(1)
-        pychuck.second = _ChuckDur(self._sample_rate)
-        pychuck.ms = pychuck.second / 1000
-        pychuck.minute = pychuck.second * 60
-        pychuck.hour = pychuck.minute * 60
-        pychuck.day = pychuck.hour * 24
-        pychuck.week = pychuck.day * 7
+        self._adc = _ADC(VM=self)
+        self._dac = _DAC(VM=self)
+        self._blackhole = _Blackhole(VM=self)
+        self._now = _ChuckTime(0)
+        self._samp = _ChuckDur(1)
+        self._second = _ChuckDur(self._sample_rate)
+        self._ms = self._second / 1000
+        self._minute = self._second * 60
+        self._hour = self._minute * 60
+        self._day = self._hour * 24
+        self._week = self._day * 7
 
     def _forward(self, indata: np.ndarray) -> np.ndarray:
-        pychuck.adc._set(indata)
+        self._adc._set(indata)
 
         while not self._command_queue.empty():
             self._run(self._command_queue.get())
@@ -92,18 +80,18 @@ class _Chuck:
             samples = min([samples_left] + [shred._samples_left for shred in self._shreds])
             self._compute(samples)
             samples_left -= samples
-            pychuck.now._sample += samples
+            self._now._sample += samples
             for shred in self._shreds:
-                shred._update(samples)
+                shred._update(samples, VM=self)
 
-        return pychuck.dac._get()
+        return self._dac._get()
 
     def _run(self, args):
         if args[0] == 'add_shred':
-            _ChuckShred(args[1])
+            _ChuckShred(VM=self, generator=args[1])
         elif args[0] == 'remove_last_shred':
             if len(self._shreds) > 0:
-                self._shreds[-1]._remove()
+                self._shreds[-1]._remove(VM=self)
 
     def _compute(self, samples: int):
         for shred in self._shreds:
@@ -111,12 +99,15 @@ class _Chuck:
                 module._computed = False
         for module in self._global_shred._modules:
             module._computed = False
-        pychuck.blackhole._compute_samples(samples)
-        pychuck.dac._compute_samples(samples)
+        self._blackhole._compute_samples(samples)
+        self._dac._compute_samples(samples)
 
     def _add_shred(self, code: str):
         exec(_wrap_code(code), globals())
-        self._command_queue.put(['add_shred', globals()['__chuck_shred__']()])
+        self._command_queue.put(['add_shred', globals()['__chuck_shred__'](
+            self, self._adc, self._dac, self._blackhole, self._now,
+            self._samp, self._ms, self._second, self._minute, self._hour, self._day, self._week
+        )])
 
     def _remove_last_shred(self):
         self._command_queue.put(['remove_last_shred'])
