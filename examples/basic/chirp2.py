@@ -4,7 +4,7 @@ s = SinOsc(gain=.5)
 e = Envelope()
 p = Pan2()
 
-s >= e >= p >= dac
+s >> e >> p >> dac
 
 
 def chirp(src, target, duration, tinc=1 * ms):

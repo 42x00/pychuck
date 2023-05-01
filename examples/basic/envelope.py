@@ -3,7 +3,7 @@ from pychuck import *
 n = Noise()
 e = Envelope()
 
-n >= e >= dac
+n >> e >> dac
 
 while True:
     e.duration = t = np.random.uniform(10, 500) * ms

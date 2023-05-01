@@ -5,9 +5,9 @@ p = Pan2()
 r1 = JCRev(mix=.1)
 r2 = JCRev(mix=.1)
 
-s >= p
-p.left >= r1 >= dac.left
-p.right >= r2 >= dac.right
+s >> p
+p.left >> r1 >> dac.left
+p.right >> r2 >> dac.right
 
 
 def dopan():

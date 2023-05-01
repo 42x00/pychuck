@@ -24,7 +24,7 @@ class UGen:
                 chan.__dict__[key] = value
         super().__setattr__(key, value)
 
-    def __ge__(self, other: 'UGen'):
+    def __rshift__(self, other: 'UGen'):
         if len(self.chan) == len(other.chan):
             for i in range(len(self.chan)):
                 self.chan[i]._out_modules.append(other.chan[i])
@@ -36,7 +36,7 @@ class UGen:
                     other_chan._in_modules.append(self_chan)
         return other
 
-    def __le__(self, other: 'UGen'):
+    def __lshift__(self, other: 'UGen'):
         for self_chan in self.chan:
             for other_chan in other.chan:
                 if self_chan in other_chan._in_modules:
@@ -828,7 +828,7 @@ class OscSend(UGen):
         super().__init__(*args, **kwargs)
 
 
-class Pan2Channel(UGen):
+class _Pan2Channel(UGen):
     def _compute(self, samples: int):
         self._buffer[:samples] = self._in_buffer[:samples]
 
@@ -836,7 +836,7 @@ class Pan2Channel(UGen):
 class Pan2(UGen):
     def __init__(self, pan: float = 0, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.chan = [Pan2Channel(*args, **kwargs) for _ in range(2)]
+        self.chan = [_Pan2Channel(*args, **kwargs) for _ in range(2)]
         self.left = self.chan[0]
         self.right = self.chan[1]
         self.pan = pan

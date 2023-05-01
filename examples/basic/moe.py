@@ -3,7 +3,7 @@ from pychuck import *
 i = Impulse()
 f = BiQuad(prad=.99, eqzs=True, gain=.5)
 
-i >= f >= dac
+i >> f >> dac
 
 v = 0.0
 while True:

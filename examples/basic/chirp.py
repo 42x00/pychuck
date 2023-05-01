@@ -2,7 +2,7 @@ from pychuck import *
 
 s = SinOsc(gain=.4)
 
-s >= dac
+s >> dac
 
 
 def chirp(src, target, duration, tinc=1 * ms):

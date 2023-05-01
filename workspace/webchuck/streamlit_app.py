@@ -29,9 +29,18 @@ def generate_image(frame: av.VideoFrame) -> av.VideoFrame:
     return av.VideoFrame.from_ndarray(chuck._canvas, format="bgr24")
 
 
-st.title("WebChucK")
+st.write(
+    """
+    WebChucK &nbsp; [![GitHub][github_badge]][github_link] [![PyPI][pypi_badge]][pypi_link]
+    =====================
+    [github_badge]: https://badgen.net/badge/icon/GitHub?icon=github&color=black&label
+    [github_link]: https://github.com/ccrma/chuck
+    [pypi_badge]: https://badgen.net/badge/doc/1.4.2.0/black?
+    [pypi_link]: http://18.144.88.181/CKDoc.html
+    """
+)
 
-cols = st.columns(3)
+cols = st.columns([1, 2, 1])
 
 with cols[0]:
     webrtc_streamer(
@@ -48,13 +57,16 @@ with cols[1]:
                      value="""from pychuck import *
 import cv2
 
-s = SinOsc()
+s = SinOsc(freq=440, gain=0.5)
 s >= dac
 
+radius, color, thickness = 15, (255, 255, 255), -1
 while True:
+    x = int(now) // 100 % 640
+    y = int(s.last * 240 + 240)
     canvas.fill(0)
-    cv2.circle(canvas, (int(s.last * 200 + 320), 240), 30, (255, 255, 255), -1)
-    now += 1600 * samp
+    cv2.circle(canvas, (x, y), radius, color, thickness)
+    now += 1000 * samp
  """)
 
     subcols = st.columns(6)

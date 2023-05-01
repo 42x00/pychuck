@@ -2,7 +2,7 @@ from pychuck import *
 
 s = SinOsc(gain=.15)
 
-s >= dac
+s >> dac
 
 t = 0.0
 while True:

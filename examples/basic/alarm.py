@@ -11,7 +11,7 @@ while now < later:
 s = SinOsc(freq=800)
 r = JCRev(mix=.025)
 
-s >= r >= dac
+s >> r >> dac
 
 while True:
     s.gain = 1

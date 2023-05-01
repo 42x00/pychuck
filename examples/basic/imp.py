@@ -2,7 +2,7 @@ from pychuck import *
 
 i = Impulse(gain=.5)
 
-i >= dac
+i >> dac
 
 a = 2000
 while True:

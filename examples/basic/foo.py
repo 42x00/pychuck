@@ -3,7 +3,7 @@ from pychuck import *
 s = SinOsc(gain=.2)
 r = JCRev(mix=.1)
 
-s >= r >= dac
+s >> r >> dac
 
 hi = [0, 2, 4, 7, 9, 11]
 while True:

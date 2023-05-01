@@ -7,8 +7,8 @@ imp = Noise()
 lowpass = OneZero()
 delay = Delay(delay=L * samp, gain=R ** L)
 
-imp >= lowpass >= dac
-lowpass >= delay >= lowpass
+imp >> lowpass >> dac
+lowpass >> delay >> lowpass
 
 lowpass.zero = -1
 imp.gain = 1

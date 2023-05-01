@@ -3,8 +3,8 @@ from pychuck import *
 row = SinOsc()
 col = SinOsc()
 
-row >= dac
-col >= dac
+row >> dac
+col >> dac
 
 cols = [1209.0, 1336.0, 1477.0]
 rows = [697.0, 770.0, 852.0, 941.0]

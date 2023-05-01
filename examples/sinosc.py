@@ -2,7 +2,7 @@ from pychuck import *
 
 # patch
 s = SinOsc(gain=.5)
-s >= dac
+s >> dac
 
 # update
 while True:

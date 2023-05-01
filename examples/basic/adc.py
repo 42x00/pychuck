@@ -1,6 +1,6 @@
 from pychuck import *
 
-adc >= Gain() >= dac
+adc >> Gain() >> dac
 
 while True:
     now += 100 * ms

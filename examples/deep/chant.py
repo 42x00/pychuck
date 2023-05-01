@@ -28,23 +28,23 @@ global modphase, period, targetPeriod, f1freq, target_f1freq, f2freq, target_f2f
 # --------------------------------------------------------------------
 
 # synthesis patch
-(i := Impulse()) >= (t := TwoZero()) >= (t2 := TwoZero()) >= (p := OnePole())
+(i := Impulse()) >> (t := TwoZero()) >> (t2 := TwoZero()) >> (p := OnePole())
 # formant filters
-p >= (f1 := TwoPole()) >= (g := Gain())
-p >= (f2 := TwoPole()) >= g
-p >= (f3 := TwoPole()) >= g
+p >> (f1 := TwoPole()) >> (g := Gain())
+p >> (f2 := TwoPole()) >> g
+p >> (f3 := TwoPole()) >> g
 # reverbs
-g >= (r := JCRev()) >= dac
-g >= (rL := JCRev()) >= dac.left
-g >= (rR := JCRev()) >= dac.right
+g >> (r := JCRev()) >> dac
+g >> (rL := JCRev()) >> dac.left
+g >> (rR := JCRev()) >> dac.right
 # delays
-g >= (d1 := Delay()) >= (g1 := Gain()) >= r
-g >= (d2 := Delay()) >= (g2 := Gain()) >= rL
-g >= (d3 := Delay()) >= (g3 := Gain()) >= rR
+g >> (d1 := Delay()) >> (g1 := Gain()) >> r
+g >> (d2 := Delay()) >> (g2 := Gain()) >> rL
+g >> (d3 := Delay()) >> (g3 := Gain()) >> rR
 # connect gains to delays
-g1 >= d1
-g2 >= d2
-g3 >= d3
+g1 >> d1
+g2 >> d2
+g3 >> d3
 
 # source gain (amplitude of the impulse train)
 sourceGain = 0.25

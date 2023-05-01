@@ -3,8 +3,8 @@ from pychuck import *
 imp = Impulse()
 s = SinOsc(freq=220)
 
-imp >= dac
-s >= blackhole
+imp >> dac
+s >> blackhole
 
 
 def play_with_dither(src, T, qbits, do_dither):

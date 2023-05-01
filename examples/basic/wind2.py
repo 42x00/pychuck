@@ -3,7 +3,7 @@ from pychuck import *
 n = Noise()
 f = BiQuad(prad=.99, eqzs=True, gain=.05)
 
-n >= f >= dac
+n >> f >> dac
 
 
 def wind_gain():

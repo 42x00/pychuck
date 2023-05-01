@@ -62,6 +62,9 @@ class _ChuckTime:
     def __str__(self) -> str:
         return str(self._sample)
 
+    def __int__(self):
+        return int(self._sample)
+
     def copy(self):
         return _ChuckTime(self._sample)
 

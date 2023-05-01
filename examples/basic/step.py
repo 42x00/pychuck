@@ -2,7 +2,7 @@ from pychuck import *
 
 s = Step()
 
-s >= dac
+s >> dac
 
 v = .5
 while True:
