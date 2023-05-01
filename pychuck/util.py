@@ -144,7 +144,7 @@ class _ChuckCodeTransformer(ast.NodeTransformer):
 def _wrap_code(code: str) -> str:
     wrapper_tree = ast.parse(f'''
 from pychuck import *
-def __chuck_shred__(VM, adc, dac, blackhole, now, samp, ms, second, minute, hour, day, week):
+def __chuck_shred__(VM, adc, dac, blackhole, now, samp, ms, second, minute, hour, day, week, canvas):
     pass
 ''')
     code_tree = ast.parse(code)

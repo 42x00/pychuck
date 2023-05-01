@@ -5,19 +5,15 @@ import streamlit as st
 from streamlit_ace import st_ace
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
-import pychuck
 from pychuck.core import _Chuck
 
 st.set_page_config(layout="wide")
 
+if 'chuck' not in st.session_state:
+    st.session_state.chuck = _Chuck(sample_rate=48000, buffer_size=960, in_channels=2)
+    st.session_state.chuck._canvas = np.zeros((480, 640, 3), dtype=np.uint8)
 
-@st.cache_resource
-def init():
-    pychuck.canvas = np.zeros((480, 640, 3), dtype=np.uint8)
-    return _Chuck(sample_rate=48000, buffer_size=960, in_channels=2)
-
-
-chuck = init()
+chuck = st.session_state.chuck
 
 
 def process_audio(frame: av.AudioFrame) -> av.AudioFrame:
@@ -30,7 +26,7 @@ def process_audio(frame: av.AudioFrame) -> av.AudioFrame:
 
 
 def generate_image(frame: av.VideoFrame) -> av.VideoFrame:
-    return av.VideoFrame.from_ndarray(pychuck.canvas, format="bgr24")
+    return av.VideoFrame.from_ndarray(chuck._canvas, format="bgr24")
 
 
 st.title("WebChucK")

@@ -68,6 +68,7 @@ class _Chuck:
         self._hour = self._minute * 60
         self._day = self._hour * 24
         self._week = self._day * 7
+        self._canvas = None
 
     def _forward(self, indata: np.ndarray) -> np.ndarray:
         self._adc._set(indata)
@@ -106,7 +107,7 @@ class _Chuck:
         exec(_wrap_code(code), globals())
         self._command_queue.put(['add_shred', globals()['__chuck_shred__'](
             self, self._adc, self._dac, self._blackhole, self._now,
-            self._samp, self._ms, self._second, self._minute, self._hour, self._day, self._week
+            self._samp, self._ms, self._second, self._minute, self._hour, self._day, self._week, self._canvas
         )])
 
     def _remove_last_shred(self):
