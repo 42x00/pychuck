@@ -19,3 +19,5 @@ minute: _ChuckDur
 hour: _ChuckDur
 day: _ChuckDur
 week: _ChuckDur
+
+canvas: np.ndarray

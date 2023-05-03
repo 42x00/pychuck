@@ -168,11 +168,10 @@ def _load_stk(compile=True, root='/Users/ykli/research/pychuck/workspace/wrapper
                     and isinstance(node.value.func, ast.Attribute) \
                     and node.value.func.attr.startswith(f'{cls_name}_'):
                 fname = node.value.func.attr.split('_')[-1]
-                if fname == 'ctor':
-                    continue
+                arg0 = [] if fname == 'ctor' else ['p']
                 restype = node.targets[0].id
                 argtypes = [n.func.id for n in node.value.args if isinstance(n, ast.Call)]
-                cls_doc[fname] = (restype[0], ['p'] + [t[0] for t in argtypes])
+                cls_doc[fname] = (restype[0], arg0 + [t[0] for t in argtypes])
         doc[cls_name] = cls_doc
 
     if compile:
@@ -189,7 +188,7 @@ def _load_stk(compile=True, root='/Users/ykli/research/pychuck/workspace/wrapper
     {cpp_type_map[restype]} {k}_{fname}({', '.join([f'{cpp_type_map[t]} arg{i}' for i, t in enumerate(argtypes)])}) {{
 """
                 if fname == 'ctor':
-                    cpp_code += f'\t\treturn new stk::{k}();\n'
+                    cpp_code += f'\t\treturn new stk::{k}({", ".join([f"arg{i}" for i in range(len(argtypes))])});\n'
                 elif fname == 'dtor':
                     cpp_code += f'\t\tdelete arg0;\n'
                 else:

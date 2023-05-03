@@ -1,19 +1,43 @@
 import av
 import cv2
+import glob
+import logging
+import pandas as pd
 import numpy as np
 import streamlit as st
 from streamlit_ace import st_ace
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
-from pychuck.core import _Chuck
+from pychuck import _Chuck
 
 st.set_page_config(layout="wide")
 
+
+# load data
+@st.cache_data
+def load_data():
+    example_names = ['SinOsc', 'Gain', 'ADSR', 'JCRev', 'Impulse', 'BiQuad', 'Sndbuf', 'Mandolin']
+    examples = {}
+    for name in example_names:
+        examples[name] = open(f"examples/{name}.py").read()
+    return example_names, examples
+
+
+example_names, examples = load_data()
+
+# init chuck
 if 'chuck' not in st.session_state:
+    st_webrtc_logger = logging.getLogger("streamlit_webrtc")
+    st_webrtc_logger.setLevel(logging.WARNING)
+    aioice_logger = logging.getLogger("aioice")
+    aioice_logger.setLevel(logging.WARNING)
     st.session_state.chuck = _Chuck(sample_rate=48000, buffer_size=960, in_channels=2)
     st.session_state.chuck._canvas = np.zeros((480, 640, 3), dtype=np.uint8)
 
 chuck = st.session_state.chuck
+
+if 'shreds' not in st.session_state:
+    st.session_state.shreds = pd.DataFrame({"name": ["empty"], "time": ["0:00"], "remove": [False]})
 
 
 def process_audio(frame: av.AudioFrame) -> av.AudioFrame:
@@ -25,11 +49,12 @@ def process_audio(frame: av.AudioFrame) -> av.AudioFrame:
     return new_frame
 
 
-def generate_image(frame: av.VideoFrame) -> av.VideoFrame:
+def generate_image() -> av.VideoFrame:
     return av.VideoFrame.from_ndarray(chuck._canvas, format="bgr24")
 
 
-st.write(
+# title
+st.sidebar.write(
     """
     WebChucK &nbsp; [![GitHub][github_badge]][github_link] [![PyPI][pypi_badge]][pypi_link]
     =====================
@@ -40,39 +65,44 @@ st.write(
     """
 )
 
-cols = st.columns([1, 2, 1])
-
-with cols[0]:
+with st.sidebar:
+    # webchuck
     webrtc_streamer(
-        key="audio-filter",
+        key="webchuck",
         mode=WebRtcMode.SENDRECV,
         rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        media_stream_constraints={"video": False, "audio": True},
         audio_frame_callback=process_audio,
-        video_frame_callback=generate_image,
         async_processing=True,
     )
 
-with cols[1]:
-    content = st_ace(language="python", theme="gruvbox", auto_update=True, height=600,
-                     value="""from pychuck import *
-import cv2
+    add_shred = st.button("ADD SHRED", type="primary")
+    replace_shred = st.button("REPLACE SHRED", type="secondary")
+    remove_last_shred = st.button("REMOVE LAST SHRED", type="secondary")
 
-s = SinOsc(freq=440, gain=0.5)
-s >= dac
+    st.experimental_data_editor(st.session_state.shreds, use_container_width=True, key="shreds")
 
-radius, color, thickness = 15, (255, 255, 255), -1
-while True:
-    x = int(now) // 100 % 640
-    y = int(s.last * 240 + 240)
-    canvas.fill(0)
-    cv2.circle(canvas, (x, y), radius, color, thickness)
-    now += 1000 * samp
- """)
+    use_vim = st.checkbox("Enable Vim", value=False)
 
-    subcols = st.columns(6)
-    with subcols[0]:
-        if st.button("ADD SHRED", type="primary"):
-            chuck._add_shred(content)
-    with subcols[1]:
-        if st.button("REMOVE", type="secondary"):
-            chuck._remove_last_shred()
+maincols = st.columns(2)
+
+with maincols[0]:
+    example = st.selectbox("Example", example_names, key="example", index=0)
+    example_code = examples[example]
+    code = st_ace(
+        value=example_code,
+        language="python",
+        theme="gruvbox",
+        keybinding="vim" if use_vim else "vscode",
+        min_lines=25,
+        key=f"editor{example}"
+    )
+    st.text_area("Console", value="", height=150, key="console", disabled=True)
+
+if add_shred:
+    chuck._add_shred(code)
+elif replace_shred:
+    chuck._remove_last_shred()
+    chuck._add_shred(code)
+elif remove_last_shred:
+    chuck._remove_last_shred()

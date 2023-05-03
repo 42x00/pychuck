@@ -1,4 +1,5 @@
 import numpy as np
+import soundfile as sf
 
 from .util import _ChuckDur
 
@@ -445,8 +446,25 @@ class FeatureCollector(UGen):
 
 
 class FFT(UGen):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, size: int = 512, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.spectrum = None
+        self._accumulator = None
+        self._i = 0
+        self.size = size
+
+    def __setattr__(self, key, value):
+        if key == 'size':
+            self._accumulator = np.zeros(value, dtype=np.float32)
+            self._i = 0
+        super().__setattr__(key, value)
+
+    def upchuck(self):
+        self.spectrum = np.fft.fft(self._accumulator)
+
+    def _compute(self, samples: int):
+        if samples > self.size:
+            self._accumulator = self._in_buffer[-self.size:]
 
 
 class FileIO(UGen):
@@ -680,9 +698,31 @@ class Machine(UGen):
         super().__init__(*args, **kwargs)
 
 
-class Mandolin(UGen):
+class Mandolin(_STK):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        UGen.__init__(self, *args, **kwargs)
+        self._libstk_wrapper = kwargs['VM']._libstk_wrapper
+        pointer = self._libstk_wrapper.Mandolin_ctor(float(220.0))
+        self._stk_object = pointer
+        self.freq = None
+        self.pluckPos = None
+        self.bodySize = None
+
+    def __setattr__(self, key, value):
+        if key == "freq":
+            if value is not None:
+                void = self._libstk_wrapper.Mandolin_setFrequency(self._stk_object, float(value))
+        elif key == "pluckPos":
+            if value is not None:
+                void = self._libstk_wrapper.Mandolin_setPluckPosition(self._stk_object, float(value))
+        elif key == "bodySize":
+            if value is not None:
+                void = self._libstk_wrapper.Mandolin_setBodySize(self._stk_object, float(value))
+        super().__setattr__(key, value)
+
+    def pluck(self, amplitude: float = 1.0):
+        void = self._libstk_wrapper.Mandolin_pluck(self._stk_object, float(amplitude))
+        
 
 
 class Math(UGen):
@@ -952,7 +992,8 @@ class SinOsc(_STK):
     def __init__(self, freq: float = 220.0, *args, **kwargs):
         UGen.__init__(self, *args, **kwargs)
         self._libstk_wrapper = kwargs['VM']._libstk_wrapper
-        self._stk_object = self._libstk_wrapper.SineWave_ctor()
+        pointer = self._libstk_wrapper.SineWave_ctor()
+        self._stk_object = pointer
         self.freq = freq
 
     def __setattr__(self, key, value):
@@ -974,8 +1015,24 @@ class Sitar(UGen):
 
 
 class SndBuf(UGen):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, path: str = None, rate: float = 1.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.pos = 0
+        self._data = None
+        self._length = 0
+        if path is not None:
+            self.read(path)
+
+    def read(self, path: str):
+        self.pos = 0
+        self._data = sf.read(path)[0]
+        self._length = len(self._data)
+
+    def _compute(self, samples: int):
+        self.pos += samples
+        if self.pos >= self._length:
+            self.pos = samples
+        self._buffer[:samples] = self._data[self.pos - samples:self.pos]
 
 
 class SndBuf2(UGen):
