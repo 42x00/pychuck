@@ -1,20 +1,14 @@
-import pygame
 from pychuck import *
-
-pygame.init()
-screen = pygame.display.set_mode((640, 480))
+import pygame
 
 s = SinOsc(freq=440, gain=.5)
-s >= dac
+s >> dac
 
+screen = pygame.display.set_mode((640, 480))
 x = 320
-running = True
-
-while running:
+while True:
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_LEFT:
                 x -= 10
                 s.gain -= 0.05
@@ -25,5 +19,3 @@ while running:
     pygame.draw.circle(screen, (0, 0, 0), (x, 240 + s.last * 200), 30)
     pygame.display.flip()
     now += 800 * samp
-
-pygame.quit()

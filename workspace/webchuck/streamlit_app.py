@@ -16,7 +16,7 @@ st.set_page_config(layout="wide")
 # load data
 @st.cache_data
 def load_data():
-    example_names = ['SinOsc', 'Gain', 'ADSR', 'JCRev', 'Impulse', 'BiQuad', 'Sndbuf', 'Mandolin']
+    example_names = ['SinOsc', 'Gain', 'ADSR', 'JCRev', 'Impulse', 'BiQuad', 'SndBuf', 'Mandolin', 'Custom']
     examples = {}
     for name in example_names:
         examples[name] = open(f"examples/{name}.py").read()

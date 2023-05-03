@@ -722,7 +722,6 @@ class Mandolin(_STK):
 
     def pluck(self, amplitude: float = 1.0):
         void = self._libstk_wrapper.Mandolin_pluck(self._stk_object, float(amplitude))
-        
 
 
 class Math(UGen):
@@ -1223,5 +1222,10 @@ class XCorr(UGen):
 
 
 class ZeroX(UGen):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+class Custom(UGen):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

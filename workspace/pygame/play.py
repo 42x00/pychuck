@@ -1,5 +1,5 @@
-import pygame
 from pychuck import *
+import pygame
 
 key2note = {'a': 60, 'w': 61, 's': 62, 'e': 63, 'd': 64, 'f': 65, 't': 66, 'g': 67, 'y': 68, 'h': 69, 'u': 70, 'j': 71,
             'k': 72, 'o': 73, 'l': 74, 'p': 75, }
@@ -8,7 +8,7 @@ key2note = {'a': 60, 'w': 61, 's': 62, 'e': 63, 'd': 64, 'f': 65, 't': 66, 'g': 
 def play(key):
     s = SinOsc(freq=Std.mtof(key), gain=.5)
     e = ADSR(10 * ms, 200 * ms, .5, 200 * ms)
-    s >= e >= dac
+    s >> e >> dac
     e.keyOn()
     now += 300 * ms
     e.keyOff()
