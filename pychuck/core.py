@@ -76,7 +76,7 @@ class _Chuck:
         while not self._command_queue.empty():
             self._run(self._command_queue.get())
 
-        samples_left = len(indata)
+        samples_left = in_samples = len(indata)
         while samples_left > 0:
             samples = min([samples_left] + [shred._samples_left for shred in self._shreds])
             self._compute(samples)
@@ -85,7 +85,7 @@ class _Chuck:
             for shred in self._shreds:
                 shred._update(samples, VM=self)
 
-        return self._dac._get()
+        return self._dac._get()[:in_samples]
 
     def _run(self, args):
         if args[0] == 'add_shred':

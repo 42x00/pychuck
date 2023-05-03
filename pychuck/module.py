@@ -110,8 +110,8 @@ class _ADCChannel(UGen):
         if not self._computed:
             self._computed = True
             self._buffer[self._i:self._i + samples] *= self.gain
-            self._i = (self._i + samples) % self._buffer_size
-        return self._buffer[self._i - samples:self._i or None]
+            self._i += samples
+        return self._buffer[self._i - samples:self._i]
 
 
 class _ADC(UGen):
@@ -122,8 +122,10 @@ class _ADC(UGen):
         self.right = self.chan[-1]
 
     def _set(self, indata: np.ndarray):
-        for i in range(len(self.chan)):
-            self.chan[i]._buffer[:] = indata[:, i]
+        samples = len(indata)
+        for i, chan in enumerate(self.chan):
+            chan._buffer[:samples] = indata[:, i]
+            chan._i = 0
 
 
 class _DACChannel(UGen):
@@ -136,8 +138,8 @@ class _DACChannel(UGen):
             self._computed = True
             self._aggreate_inputs(samples)
             self._buffer[self._i:self._i + samples] = self._in_buffer[:samples] * self.gain
-            self._i = (self._i + samples) % self._buffer_size
-        return self._buffer[self._i - samples:self._i or None]
+            self._i += samples
+        return self._buffer[self._i - samples:self._i]
 
 
 class _DAC(UGen):
@@ -152,6 +154,8 @@ class _DAC(UGen):
             chan._compute_samples(samples)
 
     def _get(self) -> np.ndarray:
+        for chan in self.chan:
+            chan._i = 0
         return np.stack([chan._buffer for chan in self.chan], axis=1)
 
 
