@@ -2,7 +2,10 @@ Metadata-Version: 2.1
 Name: pychuck
 Version: 0.0.0
 Summary: Python implementation of the music programming language Chuck.
+Home-page: https://github.com/42x00/pychuck.git
+Author: Yikai Li
 Author-email: Yikai Li <yikaili@stanford.edu>
+Maintainer: Yikai Li
 Maintainer-email: Yikai Li <yikaili@stanford.edu>
 License: Copyright (c) 2018 The Python Packaging Authority
         
