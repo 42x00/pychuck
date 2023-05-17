@@ -1,2 +1,5 @@
 .idea
+dist
+docs/build
+src/pychuck.egg-info
 
