@@ -90,6 +90,7 @@ class _Chuck:
             unit._compute(samples)
 
     def _update_shreds(self, samples: int):
+        pychuck.now._value += samples
         for shred in self._shreds:
             shred._samples_left -= samples
             if shred._samples_left <= 0:

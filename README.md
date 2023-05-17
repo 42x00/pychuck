@@ -31,8 +31,6 @@ while True:
     200 * ms >> now
 ```
 
-### Quick Start
-
 ```bash
 # pychuck --help
 pychuck demo.py

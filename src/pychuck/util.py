@@ -6,61 +6,67 @@ from .unit import _ADC, _DAC, _Blackhole
 
 class _Time:
     def __init__(self, value: float):
-        self.value: float = value
+        self._value: float = value
 
     def __rshift__(self, other):
         raise NotImplementedError
 
     def __add__(self, other: '_Dur') -> '_Time':
         if isinstance(other, _Dur):
-            return _Time(self.value + other.value)
+            return _Time(self._value + other._value)
         else:
             raise TypeError
 
     def __sub__(self, other: '_Time' or '_Dur') -> '_Time' or '_Dur':
         if isinstance(other, _Time):
-            return _Dur(self.value - other.value)
+            return _Dur(self._value - other._value)
         elif isinstance(other, _Dur):
-            return _Time(self.value - other.value)
+            return _Time(self._value - other._value)
         else:
             raise TypeError
+
+    def __str__(self) -> str:
+        return str(self._value)
 
 
 class _Dur:
     def __init__(self, value: float):
-        self.value: float = value
+        self._value: float = value
 
     def __rshift__(self, other):
         raise NotImplementedError
 
     def __add__(self, other: '_Dur' or '_Time') -> '_Dur' or '_Time':
         if isinstance(other, _Dur):
-            return _Dur(self.value + other.value)
+            return _Dur(self._value + other._value)
         elif isinstance(other, _Time):
-            return _Time(other.value + self.value)
+            return _Time(other._value + self._value)
         else:
             raise TypeError
 
     def __sub__(self, other: '_Dur') -> '_Dur':
         if isinstance(other, _Dur):
-            return _Dur(self.value - other.value)
+            return _Dur(self._value - other._value)
         else:
             raise TypeError
 
     def __mul__(self, other: float) -> '_Dur':
-        return _Dur(self.value * other)
+        return _Dur(self._value * other)
 
     def __rmul__(self, other: float) -> '_Dur':
-        return _Dur(self.value * other)
+        return _Dur(self._value * other)
 
     def __truediv__(self, other: '_Dur' or float) -> '_Dur' or float:
         if isinstance(other, _Dur):
-            return self.value / other.value
+            return self._value / other._value
         else:
-            return _Dur(self.value / other)
+            return _Dur(self._value / other)
 
     def __int__(self) -> int:
-        return int(self.value)
+        return int(self._value)
+
+    def __str__(self) -> str:
+        return str(self._value)
 
 
 class _CodeTransformer(ast.NodeTransformer):

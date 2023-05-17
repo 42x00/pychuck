@@ -82,6 +82,11 @@ class _Blackhole(UGen):
         pass
 
 
+class Gain(UGen):
+    def _tick(self, samples: int) -> np.ndarray:
+        return self._in_buffer[:samples]
+
+
 class SinOsc(UGen):
     def __init__(self, freq: float = 440.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
