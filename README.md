@@ -1,29 +1,43 @@
 # PyChucK
 
-### Introduction
+### Installation
 
-PyChucK is a Python Implementation for [ChucK](https://chuck.stanford.edu/)
+```bash
+pip install pychuck
+```
 
 ### Usage
 
 ```python
+# demo.py
 from pychuck import *
 
-# patch
-s = SinOsc(gain=.5)
-s >= dac
 
-# update
+# Custom UGen
+class Noise(UGen):
+    def _tick(self, samples: int) -> np.ndarray:
+        return np.random.uniform(-1, 1, samples)
+
+
+# Graph
+n = Noise()
+n >> dac
+
+# Main loop
 while True:
-    s.freq = np.random.randint(30, 1000)
-    now += 200 * ms
+    # Adjust Parameters
+    n.gain = np.random.uniform(0, 1)
+    # Time Control
+    200 * ms >> now
 ```
 
-### Quickstart
+### Quick Start
 
 ```bash
-git clone https://github.com/42x00/pychuck && cd pychuck
-pip install sounddevice
-python chuck.py examples/sinosc.py
+# pychuck --help
+pychuck demo.py
 ```
 
+        
+        
+       
