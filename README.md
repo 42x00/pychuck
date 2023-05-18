@@ -6,28 +6,31 @@
 pip install pychuck
 ```
 
-### Usage
+### Quickstart
 
 ```python
 # demo.py
 from pychuck import *
 
 
-# Custom UGen
+# custom unit
 class Noise(UGen):
+    # generator
     def _tick(self, samples: int) -> np.ndarray:
         return np.random.uniform(-1, 1, samples)
 
 
-# Graph
-n = Noise()
+# unit
+n = Noise(gain=0.5)
+
+# graph
 n >> dac
 
-# Main loop
+# main loop
 while True:
-    # Adjust Parameters
+    # parameter
     n.gain = np.random.uniform(0, 1)
-    # Time Control
+    # time
     200 * ms >> now
 ```
 

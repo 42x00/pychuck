@@ -4,9 +4,15 @@ import pychuck
 from .unit import _ADC, _DAC, _Blackhole
 
 
+def spork(generator):
+    current_shred = pychuck.me
+    current_shred._shreds.append(pychuck.core._Shred(generator))
+    pychuck.me = current_shred
+
+
 class _Time:
     def __init__(self, value: float):
-        self._value: float = value
+        self._value = value
 
     def __rshift__(self, other):
         raise NotImplementedError
@@ -17,7 +23,7 @@ class _Time:
         else:
             raise TypeError
 
-    def __sub__(self, other: '_Time' or '_Dur') -> '_Time' or '_Dur':
+    def __sub__(self, other: '_Time' or '_Dur') -> '_Dur' or '_Time':
         if isinstance(other, _Time):
             return _Dur(self._value - other._value)
         elif isinstance(other, _Dur):
@@ -31,16 +37,13 @@ class _Time:
 
 class _Dur:
     def __init__(self, value: float):
-        self._value: float = value
-
-    def __rshift__(self, other):
-        raise NotImplementedError
+        self._value = value
 
     def __add__(self, other: '_Dur' or '_Time') -> '_Dur' or '_Time':
         if isinstance(other, _Dur):
             return _Dur(self._value + other._value)
         elif isinstance(other, _Time):
-            return _Time(other._value + self._value)
+            return _Time(self._value + other._value)
         else:
             raise TypeError
 
@@ -56,7 +59,7 @@ class _Dur:
     def __rmul__(self, other: float) -> '_Dur':
         return _Dur(self._value * other)
 
-    def __truediv__(self, other: '_Dur' or float) -> '_Dur' or float:
+    def __truediv__(self, other: '_Dur' or float) -> float or '_Dur':
         if isinstance(other, _Dur):
             return self._value / other._value
         else:
@@ -100,9 +103,9 @@ def __shred__():
 
 
 def _init_globals(sample_rate: int):
-    pychuck.adc = _ADC(_add2me=False)
-    pychuck.dac = _DAC(_add2me=False)
-    pychuck.blackhole = _Blackhole(_add2me=False)
+    pychuck.adc = _ADC()
+    pychuck.dac = _DAC()
+    pychuck.blackhole = _Blackhole()
     pychuck.now = _Time(0)
     pychuck.samp = _Dur(1)
     pychuck.second = _Dur(sample_rate)

@@ -1,5 +1,5 @@
 from .unit import *
-from .core import _Chuck, _Shred, main
+from .core import _Chuck, _Shred
 from .unit import _ADC, _DAC, _Blackhole
 from .util import _Time, _Dur
 

@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pychuck"
-#version = "1.0"
-description = "Python implementation of the music programming language Chuck."
+version = "1.0.0"
+description = "Python implementation of music programming language Chuck"
 readme = "README.md"
 requires-python = ">=3.7"
 license = { file = "LICENSE" }
-keywords = ["chuck"]
+keywords = ["chuck", "music", "programming", "sound", "synthesis"]
 authors = [
     { name = "Yikai Li", email = "yikaili@stanford.edu" },
 ]
@@ -24,27 +24,26 @@ classifiers = [
 dependencies = [
     "numpy",
     "networkx",
-    "pyaudio",
+    "sounddevice",
 ]
 
-dynamic = ["version"]
+# dynamic = ["version", "description"]
 
 [project.optional-dependencies]
-#gui = ["PyQt5"]
-#cli = [
-#]
+gui = ["PyQt5"]
+cli = []
 
 [project.urls]
 #homepage = "https://example.com"
-#documentation = "https://readthedocs.org"
+#documentation = "https://pychuck.readthedocs.io/en/latest/"
 repository = "https://github.com/42x00/pychuck.git"
 #changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
 [project.scripts]
-pychuck = "pychuck:main"
+pychuck = "pychuck.core:main_cli"
 
-#[project.gui-scripts]
-#spam-gui = "spam:main_gui"
+[project.gui-scripts]
+pyaudicle = "pychuck.core:main_gui"
 
 #[project.entry-points."spam.magical"]
 #tomatoes = "spam:main_tomatoes"
