@@ -1,4 +1,5 @@
 import ast
+from enum import Enum
 
 import pychuck
 from .unit import _ADC, _DAC, _Blackhole
@@ -8,6 +9,14 @@ def spork(generator):
     current_shred = pychuck.me
     current_shred._shreds.append(pychuck.core._Shred(generator))
     pychuck.me = current_shred
+
+
+class _Event(Enum):
+    ADD_SHRED = 0
+    REPLACE_SHRED = 1
+    REMOVE_SHRED = 2
+    REMOVE_LAST_SHRED = 3
+    CLEAR_VM = 4
 
 
 class _Time:
@@ -28,6 +37,42 @@ class _Time:
             return _Dur(self._value - other._value)
         elif isinstance(other, _Dur):
             return _Time(self._value - other._value)
+        else:
+            raise TypeError
+
+    def __lt__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value < other._value
+        else:
+            raise TypeError
+
+    def __le__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value <= other._value
+        else:
+            raise TypeError
+
+    def __eq__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value == other._value
+        else:
+            raise TypeError
+
+    def __ne__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value != other._value
+        else:
+            raise TypeError
+
+    def __gt__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value > other._value
+        else:
+            raise TypeError
+
+    def __ge__(self, other: '_Time') -> bool:
+        if isinstance(other, _Time):
+            return self._value >= other._value
         else:
             raise TypeError
 
@@ -64,6 +109,42 @@ class _Dur:
             return self._value / other._value
         else:
             return _Dur(self._value / other)
+
+    def __lt__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value < other._value
+        else:
+            raise TypeError
+
+    def __le__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value <= other._value
+        else:
+            raise TypeError
+
+    def __eq__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value == other._value
+        else:
+            raise TypeError
+
+    def __ne__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value != other._value
+        else:
+            raise TypeError
+
+    def __gt__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value > other._value
+        else:
+            raise TypeError
+
+    def __ge__(self, other: '_Dur') -> bool:
+        if isinstance(other, _Dur):
+            return self._value >= other._value
+        else:
+            raise TypeError
 
     def __int__(self) -> int:
         return int(self._value)

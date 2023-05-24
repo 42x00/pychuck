@@ -111,6 +111,12 @@ class _Blackhole(UGen):
         pass
 
 
+class Gain(UGen):
+    def _compute(self, samples: int):
+        self._aggregate_input(samples)
+        self.buffered = self._in_buffer[:samples] * self.gain
+
+
 class SinOsc(UGen):
     def __init__(self, freq: float = 440.0, *args, **kwargs):
         super().__init__(*args, **kwargs)

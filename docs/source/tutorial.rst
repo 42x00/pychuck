@@ -6,8 +6,8 @@ Terminal
 
 .. code-block::
 
-    pychuck --help
-
+    # pychuck --help
+    pychuck demo.py
 
 Time Control
 ------------

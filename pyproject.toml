@@ -30,12 +30,12 @@ dependencies = [
 # dynamic = ["version", "description"]
 
 [project.optional-dependencies]
-gui = ["PyQt5"]
+gui = ["PyQt6-QScintilla"]
 cli = []
 
 [project.urls]
 #homepage = "https://example.com"
-#documentation = "https://pychuck.readthedocs.io/en/latest/"
+documentation = "https://pychuck.readthedocs.io/en/latest/"
 repository = "https://github.com/42x00/pychuck.git"
 #changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 

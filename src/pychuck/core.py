@@ -8,12 +8,16 @@ import networkx as nx
 import numpy as np
 import pychuck
 from .unit import _Unit
-from .util import _wrap_code, _init_globals
+from .util import _wrap_code, _init_globals, _Event
 
 
 class _Shred:
-    def __init__(self, generator: GeneratorType):
+    def __init__(self, generator: GeneratorType, name: str = 'Untitled'):
+        self._id = pychuck.VM._shred_id
+        pychuck.VM._shred_id += 1
+        self._name: str = name
         self._samples_left: int = 0
+        self._samples_computed: int = 0
         self._units: List[_Unit] = []
         self._shreds: List[_Shred] = []
         self._generator: GeneratorType = generator
@@ -28,7 +32,10 @@ class _Shred:
                 raise ValueError('Duration must be positive')
             return True
         except StopIteration:
-            self._remove()
+            pass
+        except Exception as e:
+            print(e)
+        self._remove()
         return False
 
     def _remove(self):
@@ -38,7 +45,8 @@ class _Shred:
         for unit in self._units:
             unit._remove()
         self._units.clear()
-        pychuck.VM._shreds.remove(self)
+        if self in pychuck.VM._shreds:
+            pychuck.VM._shreds.remove(self)
 
 
 class _Chuck:
@@ -48,10 +56,12 @@ class _Chuck:
         self._buffer_size: int = buffer_size
         self._in_channels: int = in_channels
         self._out_channels: int = out_channels
+        self._shred_id: int = 0
         self._shreds: List[_Shred] = []
         self._event_queue = queue.Queue()
         self._graph = nx.DiGraph()
         self._sorted_graph: List[_Unit] = []
+        self._stream: sd.Stream = self._init_stream()
         _init_globals(sample_rate)
 
     def callback(self, indata: np.ndarray) -> np.ndarray:
@@ -67,41 +77,85 @@ class _Chuck:
             for unit in self._sorted_graph:
                 unit._compute(samples_to_compute)
 
-            pychuck.now._value += samples_to_compute
-            for shred in self._shreds:
-                shred._samples_left -= samples_to_compute
-                if shred._samples_left <= 0:
-                    shred._next()
+            self._update_shreds(samples_to_compute)
 
             samples_left -= samples_to_compute
 
         return pychuck.dac._get_buffer(length)
 
-    def add_shred(self, code: str):
-        exec(_wrap_code(code), globals())
-        self._event_queue.put(globals()['__shred__']())
-
     def start(self):
-        def callback(indata, outdata, frames, time, status):
-            if status:
-                print(status)
-            outdata[:] = self.callback(indata)
+        self._stream.start()
 
-        sd.Stream(samplerate=self._sample_rate, blocksize=self._buffer_size,
-                  channels=(self._in_channels, self._out_channels), dtype=np.float32,
-                  callback=callback).start()
+    def stop(self):
+        self._stream.stop()
+
+    def add_shred(self, code: str, name: str = 'Untitled'):
         try:
-            sd.sleep(1000000)
-        except KeyboardInterrupt:
-            pass
+            exec(_wrap_code(code), globals())
+            self._event_queue.put((_Event.ADD_SHRED, globals()['__shred__'](), name))
+        except Exception as e:
+            print(e)
+
+    def replace_shred(self, code: str, name: str = 'Untitled'):
+        self.remove_shred(name)
+        self.add_shred(code, name)
+
+    def remove_shred(self, name: str = None, id: int = None):
+        self._event_queue.put((_Event.REMOVE_SHRED, name, id))
+
+    def remove_last_shred(self):
+        self._event_queue.put((_Event.REMOVE_LAST_SHRED,))
+
+    def clear_vm(self):
+        self._event_queue.put((_Event.CLEAR_VM,))
 
     def _handle_event(self, event):
-        # TODO: Handle more events
-        _Shred(event)
+        if event[0] == _Event.ADD_SHRED:
+            _Shred(event[1], event[2])
+        elif event[0] == _Event.REMOVE_SHRED:
+            if event[2] is not None:
+                for shred in self._shreds:
+                    if shred._id == event[2]:
+                        shred._remove()
+                        break
+            else:
+                for shred in self._shreds:
+                    if shred._name == event[1]:
+                        shred._remove()
+                        break
+        elif event[0] == _Event.REMOVE_LAST_SHRED:
+            if len(self._shreds) > 0:
+                self._shreds[-1]._remove()
+        elif event[0] == _Event.CLEAR_VM:
+            while len(self._shreds) > 0:
+                self._shreds[0]._remove()
+
+    def _init_stream(self):
+        def callback(indata, outdata, frames, time, status):
+            outdata[:] = self.callback(indata)
+
+        return sd.Stream(samplerate=self._sample_rate, blocksize=self._buffer_size,
+                         channels=(self._in_channels, self._out_channels), dtype=np.float32,
+                         callback=callback)
 
     def _sort_graph(self):
         # TODO: Check for cycles
         self._sorted_graph = list(nx.topological_sort(self._graph))
+
+    def _update_shreds(self, samples: int):
+        pychuck.now._value += samples
+        for shred in self._shreds:
+            shred._samples_left -= samples
+            shred._samples_computed += samples
+        while len(self._shreds) > 0:
+            flag = True
+            for shred in self._shreds:
+                if shred._samples_left <= 0:
+                    shred._next()
+                    flag = False
+                    break
+            if flag:
+                break
 
 
 def main_cli():
@@ -117,3 +171,18 @@ def main_cli():
     for file in args.files:
         chuck.add_shred(open(file).read())
     chuck.start()
+    try:
+        sd.sleep(1000000)
+    except KeyboardInterrupt:
+        pass
+
+
+def main_gui():
+    import sys
+    from PyQt6 import QtWidgets
+    from .gui import MainWindow
+    _Chuck()
+    app = QtWidgets.QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    app.exec()
