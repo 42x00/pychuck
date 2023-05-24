@@ -9,6 +9,12 @@ Terminal
     # pychuck --help
     pychuck demo.py
 
+If you want to use GUI:
+
+.. code-block::
+
+    pyaudicle
+
 Time Control
 ------------
 .. code-block::
